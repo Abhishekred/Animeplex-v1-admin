@@ -35,7 +35,7 @@ Read [Admin setup](docs/ADMIN_SETUP.md) before connecting the Supabase project. 
 The Supabase service-role key is used only inside Vercel Functions. Never add it to a VITE_ variable or commit it. Every admin API request verifies the Supabase access token and checks the active admin role. Admin data tables have RLS enabled and no direct browser policies.
 
 ## OTA client integration is still required
-The admin can create a release and expose a public staged-rollout manifest at `/api/ota/manifest`. The current AnimePlex-V1 Flutter updater still checks GitHub Releases. A separate app-side change is required to consume this manifest and verify SHA-256 before handing the APK to Android's installer. The admin release centre alone does not force an update on installed devices.
+The admin can create a release and expose a public staged-rollout manifest at `/api/ota/manifest`. The manifest is Ed25519-signed by a server-only private key and includes the APK SHA-256 checksum. The current AnimePlex-V1 Flutter updater still checks GitHub Releases. A separate app-side change is required to consume this manifest and verify SHA-256 before handing the APK to Android's installer. The admin release centre alone does not force an update on installed devices.
 
 ## Honest module status
 - Live after setup: users, announcements registry, app settings registry, OTA release registry, admin access, audit log, backup metadata, basic health checks.
