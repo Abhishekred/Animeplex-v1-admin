@@ -10,6 +10,7 @@ A standalone React/Vite administration dashboard for AnimePlex, designed for Ver
 - OTA APK upload, streaming SHA-256 calculation, release drafts, publish/pause/rollback and staged rollout manifest endpoint
 - Announcement CRUD
 - Remote app configuration registry
+- TV pairing request monitor with pending-code expiry (pairing secrets are redacted)
 - Admin role management and audit trail
 - Backup metadata view without exposing private backup payloads
 - Infrastructure health probes
@@ -39,7 +40,7 @@ The admin can create a release and expose a public staged-rollout manifest at `/
 
 ## Honest module status
 - Live after setup: users, announcements registry, app settings registry, OTA release registry, admin access, audit log, backup metadata, basic health checks.
-- Integration pending: device inventory and central content management.
+- Limited live view: TV pairing requests; complete signed-in device inventory and central content management remain pending.
 - App-side integration pending: remote configuration, announcements feed and OTA manifest consumption.
 - Restore: metadata only; destructive restore is intentionally not exposed yet.
 
