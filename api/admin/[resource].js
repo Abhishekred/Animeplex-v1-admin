@@ -95,6 +95,7 @@ export default async function handler(req, res) {
       if (req.method === "POST") {
         const body = req.body || {};
         if (!body.title || String(body.title).trim().length > 120) return send(res, 400, { error: "Title is required and must be under 120 characters." });
+        if (body.action_url) { try { const parsed = new URL(body.action_url); if (!["http:","https:"].includes(parsed.protocol)) throw new Error(); } catch { return send(res, 400, { error: "Action URL must be a valid HTTP or HTTPS URL." }); } }
         const row = { title: String(body.title).trim(), body: String(body.body || "").slice(0, 5000), type: ["info","warning","update"].includes(body.type) ? body.type : "info", is_active: body.is_active !== false, action_url: body.action_url || null, created_by: user.id };
         const { data, error } = await supabase.from("app_announcements").insert(row).select("*").single();
         if (error) throw error;
@@ -105,7 +106,9 @@ export default async function handler(req, res) {
         const { id, ...changes } = req.body || {};
         if (!id) return send(res, 400, { error: "Announcement id is required." });
         const patch = {};
+        if (changes.action_url) { try { const parsed = new URL(changes.action_url); if (!["http:","https:"].includes(parsed.protocol)) throw new Error(); } catch { return send(res, 400, { error: "Action URL must be a valid HTTP or HTTPS URL." }); } }
         for (const key of ["title","body","type","is_active","action_url"]) if (key in changes) patch[key] = changes[key];
+        patch.updated_at = new Date().toISOString();
         const { data, error } = await supabase.from("app_announcements").update(patch).eq("id", id).select("*").single();
         if (error) throw error;
         await audit(ctx, "announcement.update", "announcement", id, { fields: Object.keys(patch) });
