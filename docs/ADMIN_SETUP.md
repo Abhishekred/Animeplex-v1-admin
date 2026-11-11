@@ -20,6 +20,8 @@ Set these values in the Vercel project:
 - VITE_SUPABASE_ANON_KEY
 - SUPABASE_URL (server only)
 - SUPABASE_SERVICE_ROLE_KEY (server only; never expose or commit)
+- OTA_SIGNING_PRIVATE_KEY (server-only Ed25519 PEM private key)
+- OTA_SIGNING_KEY_ID (public identifier pinned with the matching public key in the Flutter app)
 
 Redeploy after changing environment variables.
 
@@ -36,13 +38,28 @@ Redeploy after changing environment variables.
 - moderator: announcement management.
 - auditor: read-only operational and audit views.
 
-## 6. OTA integration boundary
+
+## 6. OTA signing key
+Generate an Ed25519 key pair on a trusted machine:
+
+```bash
+openssl genpkey -algorithm ED25519 -out ota-ed25519-private.pem
+openssl pkey -in ota-ed25519-private.pem -pubout -out ota-ed25519-public.pem
+```
+
+- Store the contents of the private PEM only in Vercel as OTA_SIGNING_PRIVATE_KEY.
+- Set OTA_SIGNING_KEY_ID to a short versioned identifier such as animeplex-ota-2026-01.
+- Keep the public key for the Flutter app integration. Pin it in the app and verify the manifest signature before trusting the download URL or checksum.
+- Never commit either key file. If the private key is exposed, rotate to a new key id and ship the new public key in the app before publishing with it.
+- The manifest endpoint intentionally returns 503 until the private key and key id are configured.
+
+## 7. OTA integration boundary
 The admin API stores APKs, calculates SHA-256 while uploading, stores release metadata and exposes a staged-rollout manifest at /api/ota/manifest. The AnimePlex-V1 Flutter updater currently reads GitHub Releases. It must be migrated in a separate reviewed change to query this manifest, pass a stable installation ID and verify the downloaded APK checksum before installation. Until then, publishing here does not make installed apps discover the release.
 
-## 7. Backup safety
+## 8. Backup safety
 The admin API lists backup metadata only. It never returns backups.payload to the browser. One-click restore is not enabled; safe restore needs a target user, validation, a pre-restore snapshot and explicit owner confirmation.
 
-## 8. Current integration limits
+## 9. Current integration limits
 - Users, announcements, release registry, remote settings, audit and admin roles use live Supabase/Vercel APIs after setup.
 - Devices and central content management remain integration-pending because the current app does not expose central device telemetry or a central content catalogue API.
 - Remote settings are stored but do not affect installed app behaviour until Flutter reads them.
