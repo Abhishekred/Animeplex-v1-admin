@@ -230,7 +230,7 @@ function InfoPage({active,go}){return <div className="module-layout"><div classN
 
 function ReleaseModal({close,api,notify,refresh}) {
  const [file,setFile]=useState(null);const [form,setForm]=useState({version:"",version_code:"",platform:"android",channel:"stable",mandatory:false,rollout_percent:10,release_notes:""});const [busy,setBusy]=useState(false);
- async function submit(e){e.preventDefault();if(!file)return notify("Select an APK or AAB first.");setBusy(true);try{
+ async function submit(e){e.preventDefault();if(!file)return notify("Select an APK first.");setBusy(true);try{
   const hasher=await createSHA256();hasher.init();const reader=file.stream().getReader();while(true){const part=await reader.read();if(part.done)break;hasher.update(new Uint8Array(part.value));}const sha256=hasher.digest("hex");
   const ticket=await api("releases","POST",{action:"create-upload",fileName:file.name});
   const {error:uploadError}=await supabase.storage.from("animeplex-releases").uploadToSignedUrl(ticket.path,ticket.token,file,{contentType:"application/vnd.android.package-archive",upsert:false});
