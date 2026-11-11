@@ -56,7 +56,7 @@ The client app must verify the manifest and checksum before installing. Android 
 - [x] User list, suspend/restore, owner-only delete
 - [x] Announcement registry CRUD
 - [x] App configuration registry
-- [x] OTA APK upload, SHA-256 metadata, release lifecycle and rollout manifest
+- [x] OTA APK upload, streaming SHA-256 metadata, Ed25519-signed release manifest, lifecycle and staged rollout
 - [x] Admin role grants and access disable
 - [x] Audit log, health checks and backup metadata
 - [ ] Connect Flutter updater to /api/ota/manifest and verify SHA-256
