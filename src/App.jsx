@@ -89,7 +89,7 @@ export default function App() {
     } catch(e) { setError(e.message); }
     finally { setBusy(false); }
   },[api]);
-  useEffect(()=>{if(session&&active!=="Overview"&&active!=="Devices"&&active!=="Content")loadModule(active);},[session,active,loadModule]);
+  useEffect(()=>{if(session&&active!=="Overview"&&active!=="Content")loadModule(active);},[session,active,loadModule]);
 
   const filteredNav=useMemo(()=>NAV.map(g=>({...g,items:g.items.filter(([n])=>n.toLowerCase().includes(query.toLowerCase()))})).filter(g=>g.items.length),[query]);
   const go=name=>{setActive(name);setSidebarOpen(false);setError("");};
