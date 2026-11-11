@@ -186,3 +186,9 @@ end;
 $admin_rate$;
 revoke all on function public.admin_rate_limit_check(uuid, integer) from public, anon, authenticated;
 grant execute on function public.admin_rate_limit_check(uuid, integer) to service_role;
+
+-- Explicit server-role grants: RLS bypass does not replace SQL privileges.
+grant all on public.admin_members, public.admin_audit_logs, public.app_settings,
+  public.app_announcements, public.app_releases, public.app_featured_content,
+  public.admin_rate_limit_buckets to service_role;
+grant usage, select on sequence public.admin_audit_logs_id_seq to service_role;
