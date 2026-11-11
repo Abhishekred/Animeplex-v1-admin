@@ -152,3 +152,37 @@ create table if not exists public.app_featured_content (
 create index if not exists app_featured_content_order_idx on public.app_featured_content(is_active, position, created_at desc);
 alter table public.app_featured_content enable row level security;
 revoke all on public.app_featured_content from anon, authenticated;
+
+create table if not exists public.admin_rate_limit_buckets (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  window_start timestamptz not null,
+  request_count integer not null default 0,
+  primary key (user_id, window_start)
+);
+alter table public.admin_rate_limit_buckets enable row level security;
+revoke all on public.admin_rate_limit_buckets from anon, authenticated;
+
+create or replace function public.admin_rate_limit_check(p_user_id uuid, p_max_requests integer default 120)
+returns boolean
+language plpgsql
+security definer
+set search_path = pg_catalog
+as $admin_rate$
+declare
+  v_count integer;
+  v_window timestamptz := date_trunc('minute', clock_timestamp());
+begin
+  insert into public.admin_rate_limit_buckets(user_id, window_start, request_count)
+  values (p_user_id, v_window, 1)
+  on conflict (user_id, window_start) do update
+    set request_count = public.admin_rate_limit_buckets.request_count + 1
+  returning request_count into v_count;
+
+  delete from public.admin_rate_limit_buckets
+    where window_start < v_window - interval '1 day';
+
+  return v_count <= greatest(1, least(p_max_requests, 500));
+end;
+$admin_rate$;
+revoke all on function public.admin_rate_limit_check(uuid, integer) from public, anon, authenticated;
+grant execute on function public.admin_rate_limit_check(uuid, integer) to service_role;
