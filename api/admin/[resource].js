@@ -186,7 +186,7 @@ export default async function handler(req, res) {
           return send(res, 200, { path, token: data.token, signedUrl: data.signedUrl });
         }
         if (body.action === "create") {
-          if (!body.version || !Number.isInteger(Number(body.version_code)) || !body.storage_path || !/^[a-f0-9]{64}$/i.test(String(body.sha256||""))) return send(res, 400, { error: "Version, integer version code, uploaded APK and SHA-256 checksum are required." });
+          if (!body.version || !Number.isInteger(Number(body.version_code)) || Number(body.version_code) <= 0 || !body.storage_path || !/^[a-f0-9]{64}$/i.test(String(body.sha256||""))) return send(res, 400, { error: "Version, positive integer version code, uploaded APK and SHA-256 checksum are required." });
           const row = {
             version: String(body.version).slice(0, 40), version_code: Number(body.version_code),
             platform: body.platform === "android_tv" ? "android_tv" : "android",
@@ -207,7 +207,7 @@ export default async function handler(req, res) {
           if (body.action === "publish") {
             const { data: release, error: readError } = await supabase.from("app_releases").select("id,version_code,storage_path,channel").eq("id",id).single();
             if (readError) throw readError;
-            const { data: latest } = await supabase.from("app_releases").select("version_code").eq("channel", release.channel).eq("status","published").order("version_code",{ascending:false}).limit(1).maybeSingle();
+            const { data: latest } = await supabase.from("app_releases").select("version_code").eq("channel", release.channel).eq("platform", release.platform).eq("status","published").order("version_code",{ascending:false}).limit(1).maybeSingle();
             if (latest && Number(release.version_code) <= Number(latest.version_code)) return send(res, 409, { error: "Version code must be greater than the currently published version in this channel." });
             const { data: urlData } = supabase.storage.from("animeplex-releases").getPublicUrl(release.storage_path);
             const { error } = await supabase.from("app_releases").update({ status, download_url: urlData.publicUrl, published_at: new Date().toISOString() }).eq("id",id);
