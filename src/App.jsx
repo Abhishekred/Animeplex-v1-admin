@@ -154,7 +154,8 @@ export default function App() {
           active==="Devices"?<DevicesPage items={moduleData} api={api} refresh={()=>loadModule("Devices")} notify={notify}/>:
           active==="OTA Updates"||active==="Release Channels"?<ReleasesPage releases={moduleData} setModal={setModal} setSelected={setSelected} api={api} refresh={()=>loadModule(active)} notify={notify} channelOnly={active==="Release Channels"}/>:
           active==="Users"?<UsersPage users={moduleData} api={api} refresh={()=>loadModule(active)} notify={notify}/>:
-          active==="Announcements"?<AnnouncementsPage items={moduleData} api={api} refresh={()=>loadModule(active)} setSelected={setSelected} setModal={setModal}/>:\n          active==="Content"?<ContentPage items={moduleData} api={api} refresh={()=>loadModule("Content")} notify={notify}/>:
+          active==="Announcements"?<AnnouncementsPage items={moduleData} api={api} refresh={()=>loadModule(active)} setSelected={setSelected} setModal={setModal}/>:
+          active==="Content"?<ContentPage items={moduleData} api={api} refresh={()=>loadModule("Content")} notify={notify}/>:
           active==="App Configuration"||active==="Settings"?<ConfigPage items={moduleData} api={api} refresh={()=>loadModule(active)} notify={notify}/>:
           active==="Backups"?<BackupsPage items={moduleData}/>:
           active==="Logs & Audit"?<AuditPage items={moduleData}/>:
