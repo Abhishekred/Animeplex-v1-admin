@@ -47,6 +47,19 @@ export async function requireAdmin(req, res, allowed = []) {
     send(res, 403, { error: "Your administrator role cannot perform this action." });
     return null;
   }
+  const { data: withinLimit, error: limitError } = await supabase.rpc("admin_rate_limit_check", {
+    p_user_id: authData.user.id,
+    p_max_requests: 120,
+  });
+  if (limitError) {
+    console.error("[admin-rate-limit]", limitError);
+    send(res, 503, { error: "Admin security controls are temporarily unavailable." });
+    return null;
+  }
+  if (withinLimit !== true) {
+    send(res, 429, { error: "Too many admin requests. Wait one minute and try again." });
+    return null;
+  }
   return { supabase, user: authData.user, role: membership.role };
 }
 
