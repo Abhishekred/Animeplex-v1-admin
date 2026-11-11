@@ -33,3 +33,9 @@
 - Added Ed25519 signature to the public OTA manifest; private signing key remains server-only.
 - Added SQL checks for HTTPS announcement actions, release checksums, file sizes and unique platform/channel build codes.
 - Added baseline Vercel security response headers and CI syntax checks for serverless APIs.
+
+## 2026-11-11 — Featured content management
+- Added featured content table and owner/admin API CRUD.
+- Added title, description, category, image URL, destination URL, visibility and display-order controls.
+- Added HTTP/HTTPS URL validation and audit logging.
+- The Flutter home feed still needs to consume the featured content registry.
