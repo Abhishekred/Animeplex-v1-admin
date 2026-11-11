@@ -135,3 +135,20 @@ end;
 $;
 revoke all on function public.admin_purge_user_data(text, uuid) from public, anon, authenticated;
 grant execute on function public.admin_purge_user_data(text, uuid) to service_role;
+
+create table if not exists public.app_featured_content (
+  id uuid primary key default gen_random_uuid(),
+  title text not null check (char_length(title) between 1 and 160),
+  description text not null default '',
+  category text not null default 'featured',
+  image_url text check (image_url is null or image_url ~* '^https?://'),
+  target_url text check (target_url is null or target_url ~* '^https?://'),
+  position integer not null default 0,
+  is_active boolean not null default true,
+  created_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists app_featured_content_order_idx on public.app_featured_content(is_active, position, created_at desc);
+alter table public.app_featured_content enable row level security;
+revoke all on public.app_featured_content from anon, authenticated;
