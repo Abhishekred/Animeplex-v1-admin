@@ -49,3 +49,19 @@ The client app must verify the manifest and checksum before installing. Android 
 
 ## Change log
 - 2026-11-11: Initialized the repository and added the first standalone dashboard UI scaffold.
+
+## Functional implementation status (2026-11-11)
+- [x] Supabase sign-in client and protected API session
+- [x] Server-side JWT validation and role checks
+- [x] User list, suspend/restore, owner-only delete
+- [x] Announcement registry CRUD
+- [x] App configuration registry
+- [x] OTA APK upload, SHA-256 metadata, release lifecycle and rollout manifest
+- [x] Admin role grants and access disable
+- [x] Audit log, health checks and backup metadata
+- [ ] Connect Flutter updater to /api/ota/manifest and verify SHA-256
+- [ ] Connect remote app config and announcement feed in Flutter
+- [ ] Build device telemetry and central content management contracts
+- [ ] Add tested backup restore workflow and recovery drill
+
+No live service is enabled until the migration is applied and the Vercel environment variables are configured.
