@@ -10,3 +10,18 @@
 - Added project plan, security requirements and Vercel deployment instructions.
 - No AnimePlex-V1 files were changed.
 - No live backend or OTA operation is enabled.
+
+## 2026-11-11 — Secure admin API and functional modules
+- Added Supabase email/password sign-in.
+- Added Vercel API route with Supabase JWT verification and role-based authorization.
+- Added owner/admin/release_manager/moderator/auditor roles.
+- Added live user list, suspend/restore and owner-only account deletion endpoints.
+- Added announcement create/update/enable/disable/delete.
+- Added remote app configuration registry.
+- Added admin grant and access disable operations.
+- Added backup metadata-only view, audit log and infrastructure health checks.
+- Added direct APK upload through signed Supabase Storage upload URLs.
+- Added streaming SHA-256 calculation, checksum requirement and public staged-rollout OTA manifest.
+- Added SQL schema migration, first-owner bootstrap guide and environment template.
+- Device inventory and content catalogue remain pending app-side telemetry/schema.
+- The Flutter app still uses upstream GitHub Releases; OTA manifest consumption is a separate AnimePlex-V1 change.
