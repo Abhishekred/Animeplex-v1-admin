@@ -94,7 +94,7 @@ returns void
 language plpgsql
 security definer
 set search_path = pg_catalog
-as $
+as $admin_purge$
 begin
   delete from public.mylist where user_key = p_user_key;
   delete from public.history where user_key = p_user_key;
@@ -132,7 +132,7 @@ begin
     execute 'delete from sync_private.content_bridge_events where user_key = $1' using p_user_key;
   end if;
 end;
-$;
+$admin_purge$;
 revoke all on function public.admin_purge_user_data(text, uuid) from public, anon, authenticated;
 grant execute on function public.admin_purge_user_data(text, uuid) to service_role;
 
