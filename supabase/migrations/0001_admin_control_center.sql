@@ -1,0 +1,87 @@
+-- AnimePlex Admin Control Center
+-- Apply to the existing AnimePlex Supabase project after reviewing this file.
+-- No user backup payloads or secrets are copied into the admin schema.
+
+create table if not exists public.admin_members (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  role text not null check (role in ('owner','admin','release_manager','moderator','auditor')),
+  is_active boolean not null default true,
+  created_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.admin_audit_logs (
+  id bigint generated always as identity primary key,
+  actor_id uuid references auth.users(id) on delete set null,
+  actor_email text,
+  actor_role text,
+  action text not null,
+  target_type text,
+  target_id text,
+  details jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+create index if not exists admin_audit_created_idx on public.admin_audit_logs(created_at desc);
+create index if not exists admin_audit_actor_idx on public.admin_audit_logs(actor_id, created_at desc);
+
+create table if not exists public.app_settings (
+  key text primary key,
+  value jsonb not null default 'null'::jsonb,
+  updated_by uuid references auth.users(id) on delete set null,
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.app_announcements (
+  id uuid primary key default gen_random_uuid(),
+  title text not null check (char_length(title) between 1 and 120),
+  body text not null default '',
+  type text not null default 'info' check (type in ('info','warning','update')),
+  is_active boolean not null default true,
+  action_url text,
+  created_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.app_releases (
+  id uuid primary key default gen_random_uuid(),
+  version text not null,
+  version_code bigint not null,
+  platform text not null default 'android' check (platform in ('android','android_tv')),
+  channel text not null default 'stable' check (channel in ('stable','beta','testing')),
+  mandatory boolean not null default false,
+  rollout_percent integer not null default 5 check (rollout_percent between 1 and 100),
+  release_notes text not null default '',
+  storage_path text not null,
+  download_url text,
+  sha256 text,
+  file_size bigint,
+  status text not null default 'draft' check (status in ('draft','published','paused','rolled_back')),
+  created_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  published_at timestamptz
+);
+create index if not exists app_releases_channel_version_idx on public.app_releases(channel, version_code desc);
+create index if not exists app_releases_status_idx on public.app_releases(status, created_at desc);
+
+alter table public.admin_members enable row level security;
+alter table public.admin_audit_logs enable row level security;
+alter table public.app_settings enable row level security;
+alter table public.app_announcements enable row level security;
+alter table public.app_releases enable row level security;
+
+-- No browser role policies: all admin-table reads/writes go through the Vercel
+-- API using the service-role key after verifying the caller's Supabase JWT and
+-- active admin_members row. Never ship the service-role key to Vite.
+revoke all on public.admin_members from anon, authenticated;
+revoke all on public.admin_audit_logs from anon, authenticated;
+revoke all on public.app_settings from anon, authenticated;
+revoke all on public.app_announcements from anon, authenticated;
+revoke all on public.app_releases from anon, authenticated;
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('animeplex-releases','animeplex-releases',true,2147483648,array['application/vnd.android.package-archive','application/octet-stream'])
+on conflict (id) do update set public = true, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
+
+-- Upload URLs are created only by the server-side service role. Public read is
+-- required for APK downloads until the mobile client gains signed URL support.
