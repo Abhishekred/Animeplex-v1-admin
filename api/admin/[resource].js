@@ -86,6 +86,50 @@ export default async function handler(req, res) {
       }
     }
 
+    if (resource === "content") {
+      if (req.method === "GET") {
+        const { data, error } = await supabase.from("app_featured_content").select("*").order("position").order("created_at", { ascending: false }).limit(200);
+        if (error) throw error;
+        return send(res, 200, { content: data || [] });
+      }
+      if (req.method === "POST") {
+        const body = req.body || {};
+        if (!body.title || String(body.title).trim().length > 160) return send(res, 400, { error: "Content title is required and must be under 160 characters." });
+        for (const key of ["image_url","target_url"]) if (body[key]) {
+          try { const parsed = new URL(body[key]); if (!["http:","https:"].includes(parsed.protocol)) throw new Error(); }
+          catch { return send(res, 400, { error: key + " must be a valid HTTP or HTTPS URL." }); }
+        }
+        const row = { title:String(body.title).trim(), description:String(body.description||"").slice(0,3000), category:String(body.category||"featured").slice(0,60), image_url:body.image_url||null, target_url:body.target_url||null, position:Math.max(0,Number(body.position)||0), is_active:body.is_active!==false, created_by:user.id };
+        const { data, error } = await supabase.from("app_featured_content").insert(row).select("*").single();
+        if (error) throw error;
+        await audit(ctx,"content.create","featured_content",data.id,{title:row.title});
+        return send(res,201,{content:data});
+      }
+      if (req.method === "PATCH") {
+        const { id, ...changes } = req.body || {};
+        if (!id) return send(res,400,{error:"Content id is required."});
+        for (const key of ["image_url","target_url"]) if (changes[key]) {
+          try { const parsed = new URL(changes[key]); if (!["http:","https:"].includes(parsed.protocol)) throw new Error(); }
+          catch { return send(res,400,{error:key+" must be a valid HTTP or HTTPS URL."}); }
+        }
+        const patch={};
+        for (const key of ["title","description","category","image_url","target_url","position","is_active"]) if(key in changes) patch[key]=changes[key];
+        patch.updated_at=new Date().toISOString();
+        const { data,error }=await supabase.from("app_featured_content").update(patch).eq("id",id).select("*").single();
+        if(error)throw error;
+        await audit(ctx,"content.update","featured_content",id,{fields:Object.keys(patch)});
+        return send(res,200,{content:data});
+      }
+      if (req.method === "DELETE") {
+        const { id }=req.body||{};
+        if(!id)return send(res,400,{error:"Content id is required."});
+        const {error}=await supabase.from("app_featured_content").delete().eq("id",id);
+        if(error)throw error;
+        await audit(ctx,"content.delete","featured_content",id);
+        return send(res,200,{ok:true});
+      }
+    }
+
     if (resource === "announcements") {
       if (req.method === "GET") {
         const { data, error } = await supabase.from("app_announcements").select("*").order("created_at", { ascending: false }).limit(100);
