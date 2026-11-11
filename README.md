@@ -8,6 +8,7 @@ A standalone React/Vite administration dashboard for AnimePlex, designed for Ver
 - Dashboard metrics from live Supabase records
 - User listing, reversible suspension and owner-only deletion
 - OTA APK upload, streaming SHA-256 calculation, release drafts, publish/pause/rollback and staged rollout manifest endpoint
+- Featured content CRUD (title, artwork, destination, category and order)
 - Announcement CRUD
 - Remote app configuration registry
 - TV pairing request monitor with pending-code expiry (pairing secrets are redacted)
