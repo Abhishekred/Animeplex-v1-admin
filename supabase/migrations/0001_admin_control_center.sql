@@ -37,7 +37,7 @@ create table if not exists public.app_announcements (
   body text not null default '',
   type text not null default 'info' check (type in ('info','warning','update')),
   is_active boolean not null default true,
-  action_url text,
+  action_url text check (action_url is null or action_url ~* '^https?://'),
   created_by uuid references auth.users(id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -54,8 +54,8 @@ create table if not exists public.app_releases (
   release_notes text not null default '',
   storage_path text not null,
   download_url text,
-  sha256 text,
-  file_size bigint,
+  sha256 text check (sha256 is null or sha256 ~ '^[a-f0-9]{64}$'),
+  file_size bigint check (file_size is null or file_size >= 0),
   status text not null default 'draft' check (status in ('draft','published','paused','rolled_back')),
   created_by uuid references auth.users(id) on delete set null,
   created_at timestamptz not null default now(),
@@ -63,6 +63,7 @@ create table if not exists public.app_releases (
 );
 create index if not exists app_releases_channel_version_idx on public.app_releases(channel, version_code desc);
 create index if not exists app_releases_status_idx on public.app_releases(status, created_at desc);
+create unique index if not exists app_releases_channel_build_unique on public.app_releases(platform, channel, version_code);
 
 alter table public.admin_members enable row level security;
 alter table public.admin_audit_logs enable row level security;
