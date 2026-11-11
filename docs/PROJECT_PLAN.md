@@ -65,3 +65,7 @@ The client app must verify the manifest and checksum before installing. Android 
 - [ ] Add tested backup restore workflow and recovery drill
 
 No live service is enabled until the migration is applied and the Vercel environment variables are configured.
+
+- [x] Featured content registry CRUD (title, artwork, category, destination, visibility and order)
+- [ ] Connect featured content feed to the Flutter home screen
+- [x] TV pairing request monitor and safe pending-code expiry
