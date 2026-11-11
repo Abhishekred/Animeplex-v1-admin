@@ -61,6 +61,7 @@ The admin API lists backup metadata only. It never returns backups.payload to th
 
 ## 9. Current integration limits
 - Users, announcements, release registry, remote settings, audit and admin roles use live Supabase/Vercel APIs after setup.
-- Devices and central content management remain integration-pending because the current app does not expose central device telemetry or a central content catalogue API.
+- Devices currently shows TV pairing requests only (safe metadata and pending-code expiry); a complete signed-in device inventory needs app telemetry.
+- Central content management remains pending because the app does not expose a central content catalogue API.
 - Remote settings are stored but do not affect installed app behaviour until Flutter reads them.
 - Announcement records are stored in the new table; the current app reads its feed from a GitHub raw JSON URL until its feed source is migrated.
