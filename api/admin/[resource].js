@@ -179,6 +179,27 @@ export default async function handler(req, res) {
       }
     }
 
+    if (resource === "devices") {
+      if (req.method === "GET") {
+        const { data, error } = await supabase.from("tv_pairings")
+          .select("id,code,status,device_name,app_user_id,expires_at,created_at")
+          .order("created_at", { ascending: false }).limit(100);
+        if (error) throw error;
+        return send(res, 200, { pairings: data || [] });
+      }
+      if (req.method === "POST") {
+        const { id, action } = req.body || {};
+        if (!id || action !== "expire") return send(res, 400, { error: "Pairing id and expire action are required." });
+        const { data, error } = await supabase.from("tv_pairings")
+          .update({ expires_at: Date.now() }).eq("id", id).eq("status", "pending")
+          .select("id").maybeSingle();
+        if (error) throw error;
+        if (!data) return send(res, 409, { error: "Only pending pairing requests can be expired." });
+        await audit(ctx, "device.pairing.expire", "tv_pairing", id);
+        return send(res, 200, { ok: true });
+      }
+    }
+
     if (resource === "backups" && req.method === "GET") {
       const { data, error } = await supabase.from("backups").select("user_key,updated_at").order("updated_at", { ascending: false }).limit(100);
       if (error) throw error;
