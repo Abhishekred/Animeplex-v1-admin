@@ -2,6 +2,7 @@
 
 - The Supabase service-role key is server-only. It must never appear in a VITE_ variable, browser bundle, repository file or client log.
 - Every privileged API request validates the Supabase access token and active admin_members role.
+- A database-backed per-admin request limiter caps authenticated admin API calls at 120 per minute; login throttling remains delegated to Supabase Auth.
 - Admin schema tables have RLS enabled and no anon/authenticated browser policies; admin data is accessed only through the trusted Vercel API.
 - Roles are owner, admin, release_manager, moderator and auditor. Destructive actions are role-gated.
 - User deletion runs an application-data cleanup function before deleting the Auth account. This includes user library/history/backup metadata, viewer profiles, TV rooms and associated bridge journals where present.
