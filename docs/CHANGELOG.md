@@ -39,3 +39,8 @@
 - Added title, description, category, image URL, destination URL, visibility and display-order controls.
 - Added HTTP/HTTPS URL validation and audit logging.
 - The Flutter home feed still needs to consume the featured content registry.
+
+## 2026-11-11 — API hardening
+- Added database-backed per-admin rate limiting (120 requests per minute).
+- Added explicit server-role table and audit sequence grants.
+- Added Content Registry and platform-specific OTA version-code validation.
