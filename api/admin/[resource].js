@@ -213,6 +213,14 @@ export default async function handler(req, res) {
             const { error } = await supabase.from("app_releases").update({ status, download_url: urlData.publicUrl, published_at: new Date().toISOString() }).eq("id",id);
             if (error) throw error;
           } else {
+            const { data: target, error: targetError } = await supabase.from("app_releases").select("id,status,channel,platform,version_code").eq("id",id).single();
+            if (targetError) throw targetError;
+            if (target.status !== "published") return send(res,409,{error:"Only a currently published release can be paused or rolled back."});
+            if (body.action === "rollback") {
+              const { data: latest, error: latestError } = await supabase.from("app_releases").select("id").eq("channel",target.channel).eq("platform",target.platform).eq("status","published").order("version_code",{ascending:false}).limit(1).maybeSingle();
+              if (latestError) throw latestError;
+              if (!latest || latest.id !== id) return send(res,409,{error:"Only the newest published release in its platform/channel can be rolled back."});
+            }
             const { error } = await supabase.from("app_releases").update({ status }).eq("id",id);
             if (error) throw error;
           }
