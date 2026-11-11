@@ -79,17 +79,18 @@ export default function App() {
       if(name==="Users") result=await api("users", "GET", null, "?page=1&limit=30");
       else if(name==="OTA Updates"||name==="Release Channels") result=await api("releases");
       else if(name==="Announcements") result=await api("announcements");
+      else if(name==="Content") result=await api("content");
       else if(name==="App Configuration"||name==="Settings") result=await api("config");
       else if(name==="Backups") result=await api("backups");
       else if(name==="Logs & Audit") result=await api("audit");
       else if(name==="Admin Access") result=await api("admins");
       else if(name==="System Health") result=await api("health");
-      setModuleData(result.users||result.pairings||result.releases||result.announcements||result.settings||result.backups||result.events||result.admins||result.services||[]);
+      setModuleData(result.users||result.pairings||result.content||result.releases||result.announcements||result.settings||result.backups||result.events||result.admins||result.services||[]);
       if(name==="Users") setModuleData(result.users||[]);
     } catch(e) { setError(e.message); }
     finally { setBusy(false); }
   },[api]);
-  useEffect(()=>{if(session&&active!=="Overview"&&active!=="Content")loadModule(active);},[session,active,loadModule]);
+  useEffect(()=>{if(session&&active!=="Overview")loadModule(active);},[session,active,loadModule]);
 
   const filteredNav=useMemo(()=>NAV.map(g=>({...g,items:g.items.filter(([n])=>n.toLowerCase().includes(query.toLowerCase()))})).filter(g=>g.items.length),[query]);
   const go=name=>{setActive(name);setSidebarOpen(false);setError("");};
@@ -117,7 +118,7 @@ export default function App() {
     "Overview":"Your AnimePlex ecosystem at a glance.",
     "Users":"Review accounts, access status and sign-in activity.",
     "Devices":"Review TV pairing requests and expire stale pending codes.",
-    "Content":"Manage app content sources and provider configuration.",
+    "Content":"Manage featured titles, artwork and in-app destinations.",
     "Announcements":"Publish messages that can be consumed by the mobile app.",
     "OTA Updates":"Upload, stage and distribute Android releases.",
     "Release Channels":"Manage Stable, Beta and Testing release streams.",
@@ -147,13 +148,13 @@ export default function App() {
     <main className="main-area">
       <header className="topbar"><div className="topbar-left"><button className="mobile-menu" onClick={()=>setSidebarOpen(true)}><Menu size={19}/></button><div className="breadcrumbs"><span>Workspace</span><ChevronRight size={14}/><strong>{active}</strong></div></div><div className="topbar-actions"><div className="environment"><i/> Connected session</div><IconButton label="Refresh data" onClick={()=>active==="Overview"?refresh():loadModule(active)}><RefreshCw size={16}/></IconButton><IconButton label="Toggle theme" onClick={()=>setDark(!dark)}>{dark?<Moon size={17}/>:<Sparkles size={17}/>}</IconButton><span className="top-divider"/><div className="top-avatar">{(session.user.email||"AD").slice(0,2).toUpperCase()}</div></div></header>
       <div className="page-content">
-        <div className="page-heading"><div><div className="eyebrow"><span className="eyebrow-line"/> CONTROL CENTER</div><h1>{active==="Overview"?"Dashboard overview":active}</h1><p>{intro}</p></div><div className="heading-actions"><button className="button button-quiet" onClick={()=>active==="Overview"?refresh():loadModule(active)}><Activity size={15}/> {busy?"Syncing…":"Refresh"} <span className="live-pulse"/></button>{(active==="Overview"||active==="OTA Updates")&&<button className="button button-primary" onClick={()=>{setSelected(null);setModal(active==="Overview"?"release":"release");}}><Plus size={16}/> New release</button>}{active==="Announcements"&&<button className="button button-primary" onClick={()=>{setSelected(null);setModal("announcement");}}><Plus size={16}/> New announcement</button>}</div></div>
+        <div className="page-heading"><div><div className="eyebrow"><span className="eyebrow-line"/> CONTROL CENTER</div><h1>{active==="Overview"?"Dashboard overview":active}</h1><p>{intro}</p></div><div className="heading-actions"><button className="button button-quiet" onClick={()=>active==="Overview"?refresh():loadModule(active)}><Activity size={15}/> {busy?"Syncing…":"Refresh"} <span className="live-pulse"/></button>{(active==="Overview"||active==="OTA Updates")&&<button className="button button-primary" onClick={()=>{setSelected(null);setModal(active==="Overview"?"release":"release");}}><Plus size={16}/> New release</button>}{active==="Announcements"&&<button className="button button-primary" onClick={()=>{setSelected(null);setModal("announcement");}}><Plus size={16}/> New announcement</button>}{active==="Content"&&<button className="button button-primary" onClick={()=>{setSelected(null);setModal("content");}}><Plus size={16}/> Add featured title</button>}</div></div>
         {error&&<div className="error-banner"><AlertTriangle size={16}/><span>{error}</span><button onClick={()=>setError("")}><X size={14}/></button></div>}
         {active==="Overview"?<Overview stats={stats} data={data} go={go} busy={busy}/>:
           active==="Devices"?<DevicesPage items={moduleData} api={api} refresh={()=>loadModule("Devices")} notify={notify}/>:
           active==="OTA Updates"||active==="Release Channels"?<ReleasesPage releases={moduleData} setModal={setModal} setSelected={setSelected} api={api} refresh={()=>loadModule(active)} notify={notify} channelOnly={active==="Release Channels"}/>:
           active==="Users"?<UsersPage users={moduleData} api={api} refresh={()=>loadModule(active)} notify={notify}/>:
-          active==="Announcements"?<AnnouncementsPage items={moduleData} api={api} refresh={()=>loadModule(active)} setSelected={setSelected} setModal={setModal}/>:
+          active==="Announcements"?<AnnouncementsPage items={moduleData} api={api} refresh={()=>loadModule(active)} setSelected={setSelected} setModal={setModal}/>:\n          active==="Content"?<ContentPage items={moduleData} api={api} refresh={()=>loadModule("Content")} notify={notify}/>:
           active==="App Configuration"||active==="Settings"?<ConfigPage items={moduleData} api={api} refresh={()=>loadModule(active)} notify={notify}/>:
           active==="Backups"?<BackupsPage items={moduleData}/>:
           active==="Logs & Audit"?<AuditPage items={moduleData}/>:
@@ -164,7 +165,7 @@ export default function App() {
       </div>
     </main>
     {modal==="release"&&<ReleaseModal close={()=>setModal("")} api={api} notify={notify} refresh={()=>loadModule("OTA Updates")}/>}
-    {modal==="announcement"&&<AnnouncementModal close={()=>setModal("")} api={api} notify={notify} refresh={()=>loadModule("Announcements")}/>}
+    {modal==="announcement"&&<AnnouncementModal close={()=>setModal("")} api={api} notify={notify} refresh={()=>loadModule("Announcements")}/>}{modal==="content"&&<ContentModal close={()=>setModal("")} api={api} notify={notify} refresh={()=>loadModule("Content")}/>}
     {toast&&<div className="toast"><CheckCircle2 size={17}/>{toast}<button onClick={()=>setToast("")}><X size={14}/></button></div>}
   </div>;
 }
@@ -203,6 +204,18 @@ function UsersPage({users,api,refresh,notify}) {
  async function act(u,action){if(!confirm(action==="delete"?"Permanently delete this account and its AnimePlex data? This cannot be undone.":action==="ban"?"Suspend this account?":"Restore this account?"))return;try{await api("users","POST",{userId:u.id,action,duration:"720h"});notify("User "+action+" completed.");refresh();}catch(e){notify(e.message);}}
  return <section className="panel data-panel"><div className="panel-heading"><div><h3>User management</h3><p>{rows.length} accounts on page {page} · Supabase Auth</p></div><div className="table-search"><Search size={14}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search email or name"/></div></div><div className="table-wrap"><table><thead><tr><th>USER</th><th>CREATED</th><th>LAST SIGN-IN</th><th>STATUS</th><th>ACTIONS</th></tr></thead><tbody>{shown.map(u=><tr key={u.id}><td><strong className="version-name">{u.profile?.display_name||u.email||"Unknown user"}</strong><small>{u.email} · {shortId(u.id)}</small></td><td>{fmt(u.created_at)}</td><td>{fmt(u.last_sign_in_at)}</td><td><span className={"release-status "+(u.banned_until?"paused":"published")}><i/>{u.banned_until?"Suspended":"Active"}</span></td><td><div className="table-actions">{u.banned_until?<button onClick={()=>act(u,"unban")}>Restore</button>:<button onClick={()=>act(u,"ban")}>Suspend</button>}<button className="danger-text" onClick={()=>act(u,"delete")}>Delete</button></div></td></tr>)}</tbody></table>{!shown.length&&<div className="empty-state">No matching users.</div>}</div><div className="table-footer"><span>Showing up to 30 accounts</span><div className="pagination"><button disabled={page<=1||loading} onClick={()=>goPage(page-1)}><ChevronLeft size={13}/> Previous</button><span>Page {page}</span><button disabled={rows.length<30||loading} onClick={()=>goPage(page+1)}>Next <ChevronRight size={13}/></button></div></div></section>;
 }
+function ContentPage({items,api,refresh,notify}) {
+ async function toggle(item){try{await api("content","PATCH",{id:item.id,is_active:!item.is_active});refresh();}catch(e){notify(e.message);}}
+ async function remove(item){if(!confirm("Delete this featured content entry?"))return;try{await api("content","DELETE",{id:item.id});notify("Featured content deleted.");refresh();}catch(e){notify(e.message);}}
+ return <section className="panel data-panel"><div className="panel-heading"><div><h3>Featured content</h3><p>Manage curated titles, artwork links, categories and destination URLs.</p></div><span className="preview-pill">CONTENT REGISTRY</span></div><div className="featured-grid">{items.map(item=><article className="featured-card" key={item.id}>{item.image_url?<img src={item.image_url} alt="" loading="lazy"/>:<div className="featured-placeholder"><Film size={25}/></div>}<div className="featured-copy"><span>{item.category} · #{item.position}</span><strong>{item.title}</strong><p>{item.description||"No description"}</p><div className="featured-actions"><span className={"release-status "+(item.is_active?"published":"paused")}><i/>{item.is_active?"Active":"Hidden"}</span><button onClick={()=>toggle(item)}>{item.is_active?"Hide":"Show"}</button><button className="danger-text" onClick={()=>remove(item)}>Delete</button></div></div></article>)}{!items.length&&<div className="empty-state">No featured titles yet. Add a title with artwork and a destination URL.</div>}</div><div className="notice-box warning"><AlertTriangle size={17}/><span>Featured content is stored in the admin registry. AnimePlex-V1 needs a small app-side feed integration before these entries appear on the home screen.</span></div></section>;
+}
+
+function ContentModal({close,api,notify,refresh}) {
+ const [form,setForm]=useState({title:"",description:"",category:"featured",image_url:"",target_url:"",position:0,is_active:true});const [busy,setBusy]=useState(false);
+ async function submit(e){e.preventDefault();setBusy(true);try{await api("content","POST",form);notify("Featured content saved.");close();refresh();}catch(err){notify(err.message);}finally{setBusy(false);}}
+ return <Modal title="Add featured content" subtitle="Create a curated card for the AnimePlex home feed." close={close}><form className="modal-form" onSubmit={submit}><label><span className="field-label">Title</span><input className="text-input" required maxLength="160" value={form.title} onChange={e=>setForm({...form,title:e.target.value})}/></label><label><span className="field-label">Description</span><textarea className="text-input textarea" value={form.description} onChange={e=>setForm({...form,description:e.target.value})}/></label><div className="form-grid"><label><span className="field-label">Category</span><input className="text-input" value={form.category} onChange={e=>setForm({...form,category:e.target.value})}/></label><label><span className="field-label">Display position</span><input className="text-input" type="number" min="0" value={form.position} onChange={e=>setForm({...form,position:e.target.value})}/></label></div><label><span className="field-label">Artwork image URL</span><input className="text-input" type="url" value={form.image_url} onChange={e=>setForm({...form,image_url:e.target.value})} placeholder="https://…"/></label><label><span className="field-label">Destination URL</span><input className="text-input" type="url" value={form.target_url} onChange={e=>setForm({...form,target_url:e.target.value})} placeholder="https://…"/></label><label className="checkbox-line"><input type="checkbox" checked={form.is_active} onChange={e=>setForm({...form,is_active:e.target.checked})}/> Publish in feed when app integration is ready</label><div className="modal-actions"><button type="button" className="button button-quiet" onClick={close}>Cancel</button><button className="button button-primary" disabled={busy}>{busy?"Saving…":"Save featured title"}</button></div></form></Modal>;
+}
+
 function AnnouncementsPage({items,api,refresh,setSelected,setModal}) {
  async function toggle(item){try{await api("announcements","PATCH",{id:item.id,is_active:!item.is_active});refresh();}catch(e){alert(e.message);}}
  async function remove(item){if(!confirm("Delete this announcement?"))return;try{await api("announcements","DELETE",{id:item.id});refresh();}catch(e){alert(e.message);}}
