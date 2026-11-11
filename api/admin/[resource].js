@@ -57,6 +57,9 @@ export default async function handler(req, res) {
           return send(res, 200, { ok: true });
         }
         if (action === "delete" && role === "owner") {
+          await audit(ctx, "user.delete.requested", "user", userId);
+          const { error: purgeError } = await supabase.rpc("admin_purge_user_data", { p_user_key: userId, p_user_id: userId });
+          if (purgeError) throw purgeError;
           const { error } = await supabase.auth.admin.deleteUser(userId);
           if (error) throw error;
           await audit(ctx, "user.delete", "user", userId);
