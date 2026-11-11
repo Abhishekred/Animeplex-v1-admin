@@ -18,5 +18,7 @@ jobs:
           node-version: 20
       - name: Install dependencies
         run: npm install
+      - name: Check serverless API syntax
+        run: node --check api/_lib/admin.js && node --check 'api/admin/[resource].js' && node --check api/ota/manifest.js
       - name: Build dashboard
         run: npm run build
