@@ -40,8 +40,8 @@ The Supabase service-role key is used only inside Vercel Functions. Never add it
 The admin can create a release and expose a public staged-rollout manifest at `/api/ota/manifest`. The manifest is Ed25519-signed by a server-only private key and includes the APK SHA-256 checksum. The current AnimePlex-V1 Flutter updater still checks GitHub Releases. A separate app-side change is required to consume this manifest and verify SHA-256 before handing the APK to Android's installer. The admin release centre alone does not force an update on installed devices.
 
 ## Honest module status
-- Live after setup: users, announcements registry, app settings registry, OTA release registry, admin access, audit log, backup metadata, basic health checks.
-- Limited live view: TV pairing requests; complete signed-in device inventory and central content management remain pending.
+- Live after setup: users, TV pairing request metadata, featured content registry, announcements registry, app settings registry, OTA release registry, admin access, audit log, backup metadata and basic health checks.
+- App-side integration pending: complete signed-in device inventory and displaying featured content in the Flutter home feed.
 - App-side integration pending: remote configuration, announcements feed and OTA manifest consumption.
 - Restore: metadata only; destructive restore is intentionally not exposed yet.
 
