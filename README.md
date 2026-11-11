@@ -1,56 +1,51 @@
 # AnimePlex Admin — Control Center
 
-A standalone, responsive administration dashboard for AnimePlex. This repository is being developed and reviewed independently before any integration with **AnimePlex-V1**.
+A standalone React/Vite administration dashboard for AnimePlex, designed for Vercel and backed by the existing AnimePlex Supabase project.
 
-## Stack
-- React 18 + Vite
-- Recharts analytics
-- Lucide React icons
-- Vercel-ready static frontend
+## Features
+- Secure Supabase email/password sign-in; no public admin signup
+- Server-side JWT verification and admin role authorization
+- Dashboard metrics from live Supabase records
+- User listing, reversible suspension and owner-only deletion
+- OTA APK upload, streaming SHA-256 calculation, release drafts, publish/pause/rollback and staged rollout manifest endpoint
+- Announcement CRUD
+- Remote app configuration registry
+- Admin role management and audit trail
+- Backup metadata view without exposing private backup payloads
+- Infrastructure health probes
+- Responsive dark/light dashboard
 
 ## Run locally
 ```bash
 npm install
+cp .env.example .env.local
 npm run dev
 ```
 
-Create a production build:
-```bash
-npm run build
-npm run preview
-```
+## Required setup
+Read [Admin setup](docs/ADMIN_SETUP.md) before connecting the Supabase project. Apply the SQL migration, bootstrap your first owner, and configure the Vercel environment variables.
 
-## Current UI
-- Responsive dashboard shell with searchable sidebar navigation
-- Overview cards, audience chart, service health and activity feed
-- OTA release center with release history and create-release modal
-- Navigation shells for users, devices, content, announcements, release channels, app configuration, system health, backups, audit logs, admin access and settings
-- Dark/light theme toggle
-- Mobile navigation and preview-mode notifications
+## Vercel
+- Framework: Vite
+- Build: `npm run build`
+- Output: `dist`
+- Node.js: 20+
 
-## Important: preview mode
-Metrics and release rows currently use illustrative sample data. Forms and buttons are UI previews only. No live user, server, storage, database, or OTA action is performed yet. The dashboard must not be treated as a production control panel until the secure API layer and authorization checks are implemented.
+## Security
+The Supabase service-role key is used only inside Vercel Functions. Never add it to a VITE_ variable or commit it. Every admin API request verifies the Supabase access token and checks the active admin role. Admin data tables have RLS enabled and no direct browser policies.
 
-## OTA security design
-Production release publishing will require:
-- Server-side admin authorization and role checks
-- APK/AAB type and size validation
-- Version-code validation
-- SHA-256 checksum generation and verification
-- Signed release manifests
-- Stable/Beta/Testing channels and staged rollout
-- Audit logging and safe rollout stop/rollback controls
+## OTA client integration is still required
+The admin can create a release and expose a public staged-rollout manifest at `/api/ota/manifest`. The current AnimePlex-V1 Flutter updater still checks GitHub Releases. A separate app-side change is required to consume this manifest and verify SHA-256 before handing the APK to Android's installer. The admin release centre alone does not force an update on installed devices.
 
-Android installation must use the platform-supported installation flow and user/device authorization. Do not assume silent installation or automatic downgrade is available.
+## Honest module status
+- Live after setup: users, announcements registry, app settings registry, OTA release registry, admin access, audit log, backup metadata, basic health checks.
+- Integration pending: device inventory and central content management.
+- App-side integration pending: remote configuration, announcements feed and OTA manifest consumption.
+- Restore: metadata only; destructive restore is intentionally not exposed yet.
 
-## Deployment on Vercel
-Import this repository into Vercel. Framework preset: **Vite**. Build command: `npm run build`. Output directory: `dist`. No environment variables are needed for the current UI preview.
-
-## Project documentation
-- [Project plan and architecture](docs/PROJECT_PLAN.md)
+## Documentation
+- [Admin setup](docs/ADMIN_SETUP.md)
+- [Project plan](docs/PROJECT_PLAN.md)
+- [Security baseline](docs/SECURITY.md)
 - [Deployment guide](docs/DEPLOYMENT_VERCEL.md)
 - [Change log](docs/CHANGELOG.md)
-- [Security requirements](docs/SECURITY.md)
-
-## Integration boundary
-AnimePlex-V1 is intentionally untouched. Once the admin UI is reviewed and the API contract is finalized, integration will be planned separately.
