@@ -99,7 +99,7 @@ export default async function handler(req, res) {
           try { const parsed = new URL(body[key]); if (!["http:","https:"].includes(parsed.protocol)) throw new Error(); }
           catch { return send(res, 400, { error: key + " must be a valid HTTP or HTTPS URL." }); }
         }
-        const row = { title:String(body.title).trim(), description:String(body.description||"").slice(0,3000), category:String(body.category||"featured").slice(0,60), image_url:body.image_url||null, target_url:body.target_url||null, position:Math.max(0,Number(body.position)||0), is_active:body.is_active!==false, created_by:user.id };
+        const row = { title:String(body.title).trim(), description:String(body.description||"").slice(0,3000), category:String(body.category||"featured").slice(0,60), image_url:body.image_url||null, target_url:body.target_url||null, position:Math.max(0,parseInt(body.position,10)||0), is_active:body.is_active!==false, created_by:user.id };
         const { data, error } = await supabase.from("app_featured_content").insert(row).select("*").single();
         if (error) throw error;
         await audit(ctx,"content.create","featured_content",data.id,{title:row.title});
@@ -114,6 +114,7 @@ export default async function handler(req, res) {
         }
         const patch={};
         for (const key of ["title","description","category","image_url","target_url","position","is_active"]) if(key in changes) patch[key]=changes[key];
+        if ("position" in patch) patch.position=Math.max(0,parseInt(patch.position,10)||0);
         patch.updated_at=new Date().toISOString();
         const { data,error }=await supabase.from("app_featured_content").update(patch).eq("id",id).select("*").single();
         if(error)throw error;
