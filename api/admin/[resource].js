@@ -128,14 +128,14 @@ export default async function handler(req, res) {
         const body = req.body || {};
         if (body.action === "create-upload") {
           const name = String(body.fileName || "").replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 100);
-          if (!name.toLowerCase().endsWith(".apk") && !name.toLowerCase().endsWith(".aab")) return send(res, 400, { error: "Only APK or AAB files are accepted." });
+          if (!name.toLowerCase().endsWith(".apk")) return send(res, 400, { error: "Direct OTA accepts APK files only. AAB files must be distributed through Google Play." });
           const path = "releases/" + crypto.randomUUID() + "/" + name;
           const { data, error } = await supabase.storage.from("animeplex-releases").createSignedUploadUrl(path);
           if (error) throw error;
           return send(res, 200, { path, token: data.token, signedUrl: data.signedUrl });
         }
         if (body.action === "create") {
-          if (!body.version || !Number.isInteger(Number(body.version_code)) || !body.storage_path) return send(res, 400, { error: "Version, version code and uploaded APK are required." });
+          if (!body.version || !Number.isInteger(Number(body.version_code)) || !body.storage_path || !/^[a-f0-9]{64}$/i.test(String(body.sha256||""))) return send(res, 400, { error: "Version, integer version code, uploaded APK and SHA-256 checksum are required." });
           const row = {
             version: String(body.version).slice(0, 40), version_code: Number(body.version_code),
             platform: body.platform === "android_tv" ? "android_tv" : "android",
