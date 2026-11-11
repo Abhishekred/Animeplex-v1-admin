@@ -85,3 +85,37 @@ on conflict (id) do update set public = true, file_size_limit = excluded.file_si
 
 -- Upload URLs are created only by the server-side service role. Public read is
 -- required for APK downloads until the mobile client gains signed URL support.
+
+-- Transactional cleanup for account deletion. Optional app tables are checked
+-- at runtime because some legacy reading/sync migrations are applied manually.
+create or replace function public.admin_purge_user_data(p_user_key text, p_user_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  delete from public.mylist where user_key = p_user_key;
+  delete from public.history where user_key = p_user_key;
+  delete from public.backups where user_key = p_user_key;
+  delete from public.watch_rooms where host_key = p_user_key;
+  update public.tv_pairings
+    set app_user_id = null, app_secret = null, tracker_blob = null
+    where app_user_id = p_user_id::text;
+
+  if to_regclass('public.reading_history') is not null then
+    execute 'delete from public.reading_history where user_key = $1' using p_user_key;
+  end if;
+  if to_regclass('public.viewer_profiles') is not null then
+    execute 'delete from public.viewer_profiles where user_key = $1' using p_user_key;
+  end if;
+  if to_regclass('public.mylist_sync_clock') is not null then
+    execute 'delete from public.mylist_sync_clock where user_key = $1' using p_user_key;
+  end if;
+  if to_regclass('public.mylist_sync_tombstones') is not null then
+    execute 'delete from public.mylist_sync_tombstones where user_key = $1' using p_user_key;
+  end if;
+end;
+$$;
+revoke all on function public.admin_purge_user_data(text, uuid) from public, anon, authenticated;
+grant execute on function public.admin_purge_user_data(text, uuid) to service_role;
