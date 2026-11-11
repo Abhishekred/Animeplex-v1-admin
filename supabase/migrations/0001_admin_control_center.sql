@@ -92,8 +92,8 @@ create or replace function public.admin_purge_user_data(p_user_key text, p_user_
 returns void
 language plpgsql
 security definer
-set search_path = public, pg_temp
-as $$
+set search_path = pg_catalog
+as $
 begin
   delete from public.mylist where user_key = p_user_key;
   delete from public.history where user_key = p_user_key;
@@ -115,7 +115,22 @@ begin
   if to_regclass('public.mylist_sync_tombstones') is not null then
     execute 'delete from public.mylist_sync_tombstones where user_key = $1' using p_user_key;
   end if;
+  if to_regclass('public.list_categories') is not null then
+    execute 'delete from public.list_categories where user_key = $1' using p_user_key;
+  end if;
+  if to_regclass('public.mylist_categories') is not null then
+    execute 'delete from public.mylist_categories where user_key = $1' using p_user_key;
+  end if;
+  if to_regclass('sync_private.history_bridge_events') is not null then
+    execute 'delete from sync_private.history_bridge_events where user_key = $1' using p_user_key;
+  end if;
+  if to_regclass('sync_private.library_bridge_events') is not null then
+    execute 'delete from sync_private.library_bridge_events where user_key = $1' using p_user_key;
+  end if;
+  if to_regclass('sync_private.content_bridge_events') is not null then
+    execute 'delete from sync_private.content_bridge_events where user_key = $1' using p_user_key;
+  end if;
 end;
-$$;
+$;
 revoke all on function public.admin_purge_user_data(text, uuid) from public, anon, authenticated;
 grant execute on function public.admin_purge_user_data(text, uuid) to service_role;
