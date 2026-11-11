@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, sign } from "node:crypto";
 import { serviceClient, send } from "../_lib/admin.js";
 
 export default async function handler(req,res) {
@@ -26,8 +26,7 @@ export default async function handler(req,res) {
     }
     const bucket=parseInt(createHash("sha256").update(deviceId+"|"+release.id).digest("hex").slice(0,8),16)%100;
     if(bucket>=release.rollout_percent)return send(res,200,{update_available:false,reason:"outside_rollout"});
-    return send(res,200,{
-      update_available:true,
+    const manifest = {
       version:release.version,
       version_code:Number(release.version_code),
       platform:release.platform,
@@ -38,7 +37,12 @@ export default async function handler(req,res) {
       sha256:release.sha256.toLowerCase(),
       file_size:release.file_size,
       published_at:release.published_at,
-    });
+    };
+    const privateKey=process.env.OTA_SIGNING_PRIVATE_KEY;
+    const keyId=process.env.OTA_SIGNING_KEY_ID;
+    if(!privateKey||!keyId)return send(res,503,{error:"OTA signing is not configured."});
+    const signature=sign(null,Buffer.from(JSON.stringify(manifest)),privateKey).toString("base64");
+    return send(res,200,{update_available:true,manifest,signature, key_id:keyId});
   } catch(error) {
     console.error("[ota-manifest]",error);
     return send(res,500,{error:"Update manifest is temporarily unavailable."});
