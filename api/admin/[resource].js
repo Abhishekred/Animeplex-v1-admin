@@ -23,6 +23,7 @@ export default async function handler(req, res) {
       const errors = [profiles,releases,announcements,backups,admins,recent].filter(x => x.error);
       if (errors.length) throw errors[0].error;
       return send(res, 200, {
+        role,
         stats: { users: profiles.count || 0, activeAnnouncements: announcements.count || 0, backupAccounts: backups.count || 0, admins: admins.count || 0 },
         releases: releases.data || [], backups: backups.data || [], activity: recent.data || [],
       });
@@ -157,9 +158,8 @@ export default async function handler(req, res) {
             if (readError) throw readError;
             const { data: latest } = await supabase.from("app_releases").select("version_code").eq("channel", release.channel).eq("status","published").order("version_code",{ascending:false}).limit(1).maybeSingle();
             if (latest && Number(release.version_code) <= Number(latest.version_code)) return send(res, 409, { error: "Version code must be greater than the currently published version in this channel." });
-            const { data: urlData, error: urlError } = await supabase.storage.from("animeplex-releases").createSignedUrl(release.storage_path, 60*60*24*365);
-            if (urlError) throw urlError;
-            const { error } = await supabase.from("app_releases").update({ status, download_url: urlData.signedUrl, published_at: new Date().toISOString() }).eq("id",id);
+            const { data: urlData } = supabase.storage.from("animeplex-releases").getPublicUrl(release.storage_path);
+            const { error } = await supabase.from("app_releases").update({ status, download_url: urlData.publicUrl, published_at: new Date().toISOString() }).eq("id",id);
             if (error) throw error;
           } else {
             const { error } = await supabase.from("app_releases").update({ status }).eq("id",id);
