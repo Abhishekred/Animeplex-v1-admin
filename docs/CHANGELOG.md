@@ -25,3 +25,11 @@
 - Added SQL schema migration, first-owner bootstrap guide and environment template.
 - Device inventory and content catalogue remain pending app-side telemetry/schema.
 - The Flutter app still uses upstream GitHub Releases; OTA manifest consumption is a separate AnimePlex-V1 change.
+
+## 2026-11-11 — Admin controls hardening
+- Added TV pairing request monitor and pending-code expiry without exposing pairing secrets or tracker tokens.
+- Added paginated user management.
+- Added transactional user-owned data cleanup before owner-only account deletion.
+- Added Ed25519 signature to the public OTA manifest; private signing key remains server-only.
+- Added SQL checks for HTTPS announcement actions, release checksums, file sizes and unique platform/channel build codes.
+- Added baseline Vercel security response headers and CI syntax checks for serverless APIs.
