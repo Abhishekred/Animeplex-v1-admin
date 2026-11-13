@@ -5,9 +5,10 @@ A standalone React/Vite administration dashboard for AnimePlex, designed to use 
 ## Features
 - Secure Supabase email/password sign-in; no public admin signup
 - Server-side JWT verification and admin role authorization
-- Responsive AnimePlex-branded workspace with Midnight Gold, Violet Night and Sakura accents, light/dark appearance, and reduced-motion support
+- Responsive AnimePlex command center with animated branding, light/dark appearance, reduced-motion support and eight dashboard/app palettes
 - Registry overview and seven-day admin audit activity, refreshed every 30 seconds while the dashboard is visible
-- App switches, feature flags, home message, appearance presets, source repository management and default provider settings
+- App switches, curated and custom feature flags, home message, source repository management and default provider settings
+- Appearance Studio with a visual phone mockup and editable display name, tagline, home layout, opening screen, navigation, animation, posters and background URL
 - User listing, reversible suspension and owner-only deletion
 - OTA APK upload, streaming SHA-256 calculation, release drafts, publish/pause/rollback and staged rollout manifest endpoint
 - Featured content CRUD (title, artwork, destination, category and order)
@@ -45,7 +46,7 @@ The admin can create a release and expose a public staged-rollout manifest at `/
 
 ## Module and integration status
 - Once the existing Supabase schema and Vercel environment are configured: users, TV pairing request metadata, featured content registry, announcements registry, app settings registry, OTA release registry, admin access, audit log, backup metadata and basic health checks use real records. Registry overview and audit analytics poll every 30 seconds; they are not a WebSocket feed.
-- Settings, themes, source repositories and flags are stored in `app_settings` under validated keys. Changing them does not yet change installed apps: the Flutter app needs a separate integration and supported behavior for each setting.
+- Settings, themes, source repositories and flags are stored in `app_settings` under validated keys. The `app_ui` object holds appearance choices; `theme_preset` selects one of eight palettes; `feature_flags` holds supported feature switches. Changing these values does not yet change installed apps: the Flutter app needs a separate integration and supported behavior for each setting. The phone mockup is illustrative, not a connected device.
 - Playback, live viewers, crashes, source success rates and complete device inventory require app-side telemetry. These are not currently collected or displayed as live numbers.
 - App-side integration is also pending for featured content, announcements and OTA manifest consumption. Announcements are registry entries, not push notifications.
 - A repository code change does not automatically update an installed Flutter app. Remote configuration can change supported data after integration; native code/assets require a new APK, and a dedicated compatible OTA solution would need its own integration and limitations.

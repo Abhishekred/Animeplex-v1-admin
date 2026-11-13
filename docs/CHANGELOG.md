@@ -1,5 +1,10 @@
 # Change log
 
+## 2026-11-14 — Enhanced control room
+- Added eight curated palettes, a richer animated command-center overview, and matching dashboard themes.
+- Added an appearance studio with a visual phone mockup and validated app name, tagline, layouts, navigation, motion, poster and background controls.
+- Added curated feature switches alongside custom flags and kept mobile app integration explicitly separate.
+
 ## 2026-11-13 — AnimePlex Admin Studio
 - Refreshed the responsive dashboard and added isolated sample preview, dashboard themes and motion settings.
 - Added admin audit activity analytics with 30-second polling, app controls, feature flags, appearance and source repository management.

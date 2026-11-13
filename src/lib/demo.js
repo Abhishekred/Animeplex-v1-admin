@@ -1,5 +1,6 @@
 import { buildAuditTrend } from '../../api/_lib/analytics.js';
 import { validateSetting } from '../../api/_lib/config.js';
+import { DEFAULT_APP_UI } from '../../shared/themes.js';
 
 export const PREVIEW_SESSION = Object.freeze({ user: { email: 'preview@animeplex.example' } });
 const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -25,6 +26,7 @@ export function createDemoApi() {
     settings: {
       maintenance_mode: false, community_popup_enabled: false,
       theme_preset: 'midnight-gold', accent_color: '#f3b35e',
+      app_ui: { ...DEFAULT_APP_UI },
       default_source: 'MovieBoxProvider', home_message: 'Your next story starts here.',
       feature_flags: { downloads_enabled: true, search_enabled: true },
       source_repositories: [{ id: 'stream-1', name: 'Stream-1', url: 'https://raw.githubusercontent.com/Abhishekred/Stream-1/refs/heads/builds/repo.json', enabled: true }],
