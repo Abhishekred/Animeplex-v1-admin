@@ -15,10 +15,13 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
+          cache: npm
       - name: Install dependencies
-        run: npm install
+        run: npm ci
       - name: Check serverless API syntax
-        run: node --check api/_lib/admin.js && node --check 'api/admin/[resource].js' && node --check api/ota/manifest.js
+        run: node --check api/_lib/admin.js && node --check api/_lib/analytics.js && node --check api/_lib/config.js && node --check 'api/admin/[resource].js' && node --check api/ota/manifest.js
+      - name: Test admin controls
+        run: npm test
       - name: Build dashboard
         run: npm run build

@@ -1,5 +1,12 @@
 # Change log
 
+## 2026-11-13 — AnimePlex Admin Studio
+- Refreshed the responsive dashboard and added isolated sample preview, dashboard themes and motion settings.
+- Added admin audit activity analytics with 30-second polling, app controls, feature flags, appearance and source repository management.
+- Added edit flows for announcements and featured content, restored TV pairing data loading, improved role-gated controls and fixed release platform selection during publishing.
+- Validated new settings server-side and added checks for authorization, configuration, audit aggregation and preview isolation. CI now uses the npm cache and lockfile.
+- App connection, mobile telemetry, app-facing remote settings and OTA client consumption remain separate work.
+
 ## 2026-11-11 — Admin dashboard foundation
 - Initialized the standalone AnimePlex Admin repository.
 - Added Vite + React application scaffold.

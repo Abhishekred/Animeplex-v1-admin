@@ -1,4 +1,6 @@
 import { audit, fail, requireAdmin, send } from "../_lib/admin.js";
+import { validateSetting } from "../_lib/config.js";
+import { auditWindow, buildAuditTrend } from "../_lib/analytics.js";
 
 const roles = ["owner", "admin", "release_manager", "moderator", "auditor"];
 const writeRoles = ["owner", "admin"];
@@ -12,20 +14,25 @@ export default async function handler(req, res) {
   const { supabase, user, role } = ctx;
   try {
     if (resource === "dashboard" && req.method === "GET") {
-      const [profiles, releases, announcements, backups, admins, recent] = await Promise.all([
+      const now = Date.now();
+      const [profiles, releases, announcements, backups, admins, recent, auditHistory, quickSettings] = await Promise.all([
         supabase.from("profiles").select("id", { count: "exact", head: true }),
         supabase.from("app_releases").select("id,version,channel,status,created_at,rollout_percent").order("created_at", { ascending: false }).limit(5),
         supabase.from("app_announcements").select("id", { count: "exact", head: true }).eq("is_active", true),
         supabase.from("backups").select("user_key,updated_at", { count: "exact" }).order("updated_at", { ascending: false }).limit(5),
         supabase.from("admin_members").select("user_id", { count: "exact", head: true }).eq("is_active", true),
         supabase.from("admin_audit_logs").select("id,actor_email,action,target_type,target_id,created_at").order("created_at", { ascending: false }).limit(8),
+        supabase.from("admin_audit_logs").select("created_at").gte("created_at", auditWindow(now).start).order("created_at", { ascending: false }).limit(1000),
+        supabase.from("app_settings").select("key,value").in("key", ["maintenance_mode", "community_popup_enabled", "default_source"]),
       ]);
-      const errors = [profiles,releases,announcements,backups,admins,recent].filter(x => x.error);
+      const errors = [profiles,releases,announcements,backups,admins,recent,auditHistory,quickSettings].filter(x => x.error);
       if (errors.length) throw errors[0].error;
       return send(res, 200, {
         role,
         stats: { users: profiles.count || 0, activeAnnouncements: announcements.count || 0, backupAccounts: backups.count || 0, admins: admins.count || 0 },
         releases: releases.data || [], backups: backups.data || [], activity: recent.data || [],
+        auditTrend: buildAuditTrend(auditHistory.data || [], now),
+        settings: Object.fromEntries((quickSettings.data || []).map(row => [row.key, row.value])),
       });
     }
 
@@ -77,9 +84,10 @@ export default async function handler(req, res) {
       }
       if (req.method === "PUT") {
         const { key, value } = req.body || {};
-        const allowed = ["maintenance_mode","minimum_supported_version","latest_version","support_url","discord_url","feature_flags","home_message"];
-        if (!allowed.includes(key)) return send(res, 400, { error: "Unknown configuration key." });
-        const { error } = await supabase.from("app_settings").upsert({ key, value, updated_by: user.id, updated_at: new Date().toISOString() });
+        let validValue;
+        try { validValue = validateSetting(key, value); }
+        catch (error) { return send(res, 400, { error: error.message }); }
+        const { error } = await supabase.from("app_settings").upsert({ key, value: validValue, updated_by: user.id, updated_at: new Date().toISOString() });
         if (error) throw error;
         await audit(ctx, "config.update", "setting", key);
         return send(res, 200, { ok: true });
@@ -205,9 +213,10 @@ export default async function handler(req, res) {
           if (!id) return send(res, 400, { error: "Release id is required." });
           const status = body.action === "publish" ? "published" : body.action === "pause" ? "paused" : "rolled_back";
           if (body.action === "publish") {
-            const { data: release, error: readError } = await supabase.from("app_releases").select("id,version_code,storage_path,channel").eq("id",id).single();
+            const { data: release, error: readError } = await supabase.from("app_releases").select("id,version_code,storage_path,channel,platform").eq("id",id).single();
             if (readError) throw readError;
-            const { data: latest } = await supabase.from("app_releases").select("version_code").eq("channel", release.channel).eq("platform", release.platform).eq("status","published").order("version_code",{ascending:false}).limit(1).maybeSingle();
+            const { data: latest, error: latestError } = await supabase.from("app_releases").select("version_code").eq("channel", release.channel).eq("platform", release.platform).eq("status","published").order("version_code",{ascending:false}).limit(1).maybeSingle();
+            if (latestError) throw latestError;
             if (latest && Number(release.version_code) <= Number(latest.version_code)) return send(res, 409, { error: "Version code must be greater than the currently published version in this channel." });
             const { data: urlData } = supabase.storage.from("animeplex-releases").getPublicUrl(release.storage_path);
             const { error } = await supabase.from("app_releases").update({ status, download_url: urlData.publicUrl, published_at: new Date().toISOString() }).eq("id",id);
