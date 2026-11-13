@@ -29,7 +29,7 @@ Redeploy after changing environment variables.
 - Framework preset: Vite
 - Build command: npm run build
 - Output directory: dist
-- Node.js runtime: 20+
+- Node.js runtime: 22 or newer
 
 ## 5. Roles
 - owner: full access, can grant/revoke admin roles and delete users.
