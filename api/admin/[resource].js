@@ -1,18 +1,24 @@
 import { audit, fail, requireAdmin, send } from "../_lib/admin.js";
 import { validateSetting } from "../_lib/config.js";
 import { auditWindow, buildAuditTrend } from "../_lib/analytics.js";
+import { updateOwnCredentials, verificationClient } from "../_lib/account.js";
 
 const roles = ["owner", "admin", "release_manager", "moderator", "auditor"];
 const writeRoles = ["owner", "admin"];
 const releaseRoles = ["owner", "admin", "release_manager"];
+const isMissingTable = error => error?.code === "42P01" || error?.code === "PGRST205";
 
 export default async function handler(req, res) {
   const resource = String(req.query.resource || "").toLowerCase();
-  const roleAllow = resource === "releases" ? releaseRoles : resource === "announcements" ? ["owner","admin","moderator"] : writeRoles;
+  const roleAllow = resource === "account" ? roles : resource === "releases" ? releaseRoles : resource === "announcements" ? ["owner","admin","moderator"] : writeRoles;
   const ctx = await requireAdmin(req, res, req.method === "GET" ? [] : roleAllow);
   if (!ctx) return;
   const { supabase, user, role } = ctx;
   try {
+    if (resource === "account" && req.method === "POST") {
+      const result = await updateOwnCredentials(ctx, req.body || {}, { makeVerifier: verificationClient, recordAudit: audit });
+      return send(res, result.status, result.error ? { error: result.error } : { ok: true, emailChanged: result.emailChanged, passwordChanged: result.passwordChanged });
+    }
     if (resource === "dashboard" && req.method === "GET") {
       const now = Date.now();
       const [profiles, releases, announcements, backups, admins, recent, auditHistory, quickSettings] = await Promise.all([
@@ -25,11 +31,13 @@ export default async function handler(req, res) {
         supabase.from("admin_audit_logs").select("created_at").gte("created_at", auditWindow(now).start).order("created_at", { ascending: false }).limit(1000),
         supabase.from("app_settings").select("key,value").in("key", ["maintenance_mode", "community_popup_enabled", "default_source"]),
       ]);
-      const errors = [profiles,releases,announcements,backups,admins,recent,auditHistory,quickSettings].filter(x => x.error);
+      const errors = [releases,announcements,admins,recent,auditHistory,quickSettings].filter(x => x.error);
+      if (profiles.error && !isMissingTable(profiles.error)) errors.push(profiles);
+      if (backups.error && !isMissingTable(backups.error)) errors.push(backups);
       if (errors.length) throw errors[0].error;
       return send(res, 200, {
         role,
-        stats: { users: profiles.count || 0, activeAnnouncements: announcements.count || 0, backupAccounts: backups.count || 0, admins: admins.count || 0 },
+        stats: { users: profiles.error ? null : (profiles.count || 0), activeAnnouncements: announcements.count || 0, backupAccounts: backups.error ? null : (backups.count || 0), admins: admins.count || 0 },
         releases: releases.data || [], backups: backups.data || [], activity: recent.data || [],
         auditTrend: buildAuditTrend(auditHistory.data || [], now),
         settings: Object.fromEntries((quickSettings.data || []).map(row => [row.key, row.value])),
@@ -46,7 +54,7 @@ export default async function handler(req, res) {
         const { data: profiles, error: profileError } = ids.length
           ? await supabase.from("profiles").select("id,display_name,avatar_path,created_at").in("id", ids)
           : { data: [], error: null };
-        if (profileError) throw profileError;
+        if (profileError && !isMissingTable(profileError)) throw profileError;
         const byId = new Map((profiles || []).map(x => [x.id, x]));
         return send(res, 200, { users: (data.users || []).map(x => ({
           id: x.id, email: x.email, created_at: x.created_at, last_sign_in_at: x.last_sign_in_at,
@@ -252,6 +260,7 @@ export default async function handler(req, res) {
         const { data, error } = await supabase.from("tv_pairings")
           .select("id,code,status,device_name,app_user_id,expires_at,created_at")
           .order("created_at", { ascending: false }).limit(100);
+        if (error && isMissingTable(error)) return send(res, 200, { pairings: [], available: false });
         if (error) throw error;
         return send(res, 200, { pairings: data || [] });
       }
@@ -270,6 +279,7 @@ export default async function handler(req, res) {
 
     if (resource === "backups" && req.method === "GET") {
       const { data, error } = await supabase.from("backups").select("user_key,updated_at").order("updated_at", { ascending: false }).limit(100);
+      if (error && isMissingTable(error)) return send(res, 200, { backups: [], available: false });
       if (error) throw error;
       return send(res, 200, { backups: data || [], note: "Backup payloads are never returned to the admin browser." });
     }
@@ -313,7 +323,7 @@ export default async function handler(req, res) {
 
     if (resource === "health" && req.method === "GET") {
       const checks = await Promise.all([
-        supabase.from("profiles").select("id",{count:"exact",head:true}),
+        supabase.from("admin_members").select("user_id",{count:"exact",head:true}),
         supabase.from("app_releases").select("id",{count:"exact",head:true}),
         supabase.from("admin_members").select("user_id",{count:"exact",head:true}),
       ]);

@@ -1,5 +1,10 @@
 # Change log
 
+## 2026-11-14 — Authenticated administration
+- Removed sample-data preview access and retained authenticated administrator sign-in.
+- Added current-password verification before changing an administrator's email or password.
+- Made missing app-side profiles, backups and TV pairing tables visible as unavailable without blocking the admin dashboard.
+
 ## 2026-11-14 — Session continuity and navigation
 - Added resilient session restoration, recovery after temporary network errors and one retry with a refreshed token for an unauthorized admin request.
 - Scoped manual sign-out to the current browser session and retained the existing Supabase session storage key.
