@@ -204,6 +204,10 @@ export default function App() {
   const displayName = preview ? 'Abhishek' : (currentSession.user.user_metadata?.full_name || currentSession.user.email?.split('@')[0] || 'Admin');
   const greeting = new Date().getHours()<12?'morning':new Date().getHours()<17?'afternoon':'evening';
   const refreshCurrent = () => ['Overview','Analytics','Settings'].includes(active) ? refresh() : loadModule(active);
+  const refreshCredentials = async () => {
+    try { const { error } = await supabase.auth.refreshSession(); return !error; }
+    catch { return false; }
+  };
 
   return <div className={dark?"app-shell dark":"app-shell light"} data-accent={accent}>
     {sidebarOpen&&<button className="sidebar-backdrop" aria-label="Close menu" onClick={()=>setSidebarOpen(false)}/>}
@@ -231,7 +235,7 @@ export default function App() {
           active==="Announcements"?<AnnouncementsPage items={moduleData} api={api} refresh={()=>loadModule(active)} setSelected={setSelected} setModal={setModal} canEdit={canAnnounce}/>:
           active==="Content"?<ContentPage items={moduleData} api={api} refresh={()=>loadModule("Content")} notify={notify} setSelected={setSelected} setModal={setModal} canEdit={canEdit}/>:
           active==="App Configuration"?<ConfigPage items={moduleData} api={api} refresh={()=>loadModule(active)} notify={notify} canEdit={canEdit}/>:
-          active==="Settings"?<DashboardPreferences dark={dark} setDark={setDark} accent={accent} setAccent={setAccent} autoRefresh={autoRefresh} setAutoRefresh={setAutoRefresh} preview={preview} email={currentSession.user.email} onSignOut={signOut}/>:
+          active==="Settings"?<DashboardPreferences dark={dark} setDark={setDark} accent={accent} setAccent={setAccent} autoRefresh={autoRefresh} setAutoRefresh={setAutoRefresh} preview={preview} email={currentSession.user.email} onSignOut={signOut} api={api} notify={notify} refreshSession={refreshCredentials}/>:
           active==="Backups"?<BackupsPage items={moduleData}/>:
           active==="Logs & Audit"?<AuditPage items={moduleData}/>:
           active==="Admin Access"?<AdminsPage items={moduleData} api={api} refresh={()=>loadModule(active)} notify={notify} isOwner={role==='owner'}/>:
