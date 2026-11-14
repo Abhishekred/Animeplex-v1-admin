@@ -1,5 +1,11 @@
 # Change log
 
+## 2026-11-14 — Session continuity and navigation
+- Added resilient session restoration, recovery after temporary network errors and one retry with a refreshed token for an unauthorized admin request.
+- Scoped manual sign-out to the current browser session and retained the existing Supabase session storage key.
+- Added a searchable command palette, quick mobile navigation dock, a session panel and refined dashboard styling.
+- Tested session restore, token refresh, local sign-out and recovery with a mocked Supabase Auth service.
+
 ## 2026-11-14 — Enhanced control room
 - Added eight curated palettes, a richer animated command-center overview, and matching dashboard themes.
 - Added an appearance studio with a visual phone mockup and validated app name, tagline, layouts, navigation, motion, poster and background controls.

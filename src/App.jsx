@@ -10,8 +10,10 @@ import {
   ClipboardList, KeyRound
 } from "lucide-react";
 import { isSupabaseConfigured, supabase } from "./lib/supabase.js";
+import { observeAuthSession, requestWithSessionRetry } from "./lib/session.js";
 import { createDemoApi, PREVIEW_SESSION } from "./lib/demo.js";
 import { AnalyticsPage, AppControlPage, AuditChart, DashboardPreferences, SourcesPage } from "./components/Studio.jsx";
+import { CommandPalette, MobileNavigation } from "./components/Navigation.jsx";
 
 const NAV = [
   { label:"WORKSPACE", items:[["Overview",LayoutDashboard],["Analytics",Gauge],["Users",Users],["Devices",Smartphone],["Content",Film],["Announcements",MessageSquareText]] },
@@ -34,11 +36,14 @@ export default function App() {
   const [session,setSession] = useState(null);
   const [preview,setPreview] = useState(false);
   const previewApi = useRef(null);
+  const sessionObserver = useRef(null);
   const navSearch = useRef(null);
   const dashboardRequest = useRef(0);
   const moduleRequest = useRef(0);
   const currentSession = preview ? PREVIEW_SESSION : session;
   const [authLoading,setAuthLoading] = useState(true);
+  const [authIssue,setAuthIssue] = useState("");
+  const [commandOpen,setCommandOpen] = useState(false);
   const [active,setActive] = useState("Overview");
   const [role,setRole] = useState("");
   const [sidebarOpen,setSidebarOpen] = useState(false);
@@ -59,10 +64,10 @@ export default function App() {
   const api = useCallback(async (resource,method="GET",body=null,params="") => {
     if (preview) return previewApi.current(resource,method,body,params);
     if (!session?.access_token) throw new Error("Please sign in again.");
-    const response = await fetch("/api/admin/"+resource+params,{
-      method,headers:{"Content-Type":"application/json",Authorization:"Bearer "+session.access_token},
+    const response = await requestWithSessionRetry(supabase.auth, session.access_token, token => fetch("/api/admin/"+resource+params,{
+      method,headers:{"Content-Type":"application/json",Authorization:"Bearer "+token},
       ...(body ? {body:JSON.stringify(body)} : {})
-    });
+    }));
     const payload = await response.json().catch(()=>({}));
     if (!response.ok) throw new Error(payload.error || "Request failed ("+response.status+").");
     return payload;
@@ -70,9 +75,19 @@ export default function App() {
 
   useEffect(()=>{
     if (!isSupabaseConfigured) { setAuthLoading(false); return; }
-    supabase.auth.getSession().then(({data})=>setSession(data.session)).catch(e=>setError(e.message)).finally(()=>setAuthLoading(false));
-    const {data:listener}=supabase.auth.onAuthStateChange((_event,next)=>setSession(next));
-    return ()=>listener.subscription.unsubscribe();
+    let recovering = false;
+    const observer = observeAuthSession(supabase.auth, {
+      onSession(next,event) {
+        recovering = false; setAuthIssue(""); setSession(next); setAuthLoading(false);
+        if (event === 'SIGNED_OUT') { setRole(""); setData(EMPTY); setModuleData([]); setSelected(null); setModal(""); setLastSync(null); }
+      },
+      onUnavailable() { recovering = true; setAuthIssue("We couldn't restore your session. Check your connection and try again."); setAuthLoading(false); },
+    });
+    sessionObserver.current = observer;
+    observer.restore();
+    const onOnline = () => { if (recovering) observer.restore(); };
+    window.addEventListener('online', onOnline);
+    return ()=>{window.removeEventListener('online', onOnline); observer.close(); if(sessionObserver.current===observer)sessionObserver.current=null;};
   },[]);
 
   const refresh = useCallback(async()=>{
@@ -97,13 +112,13 @@ export default function App() {
   useEffect(()=>savePref('animeplex-admin-refresh',autoRefresh?'on':'off'),[autoRefresh]);
   useEffect(()=>{
     const onKeyDown = event => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
-        event.preventDefault();setSidebarOpen(true);navSearch.current?.focus();
+      if (currentSession && (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();setCommandOpen(true);
       }
     };
     window.addEventListener('keydown',onKeyDown);
     return ()=>window.removeEventListener('keydown',onKeyDown);
-  },[]);
+  },[currentSession]);
 
   const loadModule = useCallback(async(name)=>{
     const request=++moduleRequest.current;
@@ -127,6 +142,7 @@ export default function App() {
   useEffect(()=>{if(currentSession&&!['Overview','Analytics','Settings'].includes(active))loadModule(active);return()=>{moduleRequest.current++;};},[currentSession,active,loadModule]);
 
   const filteredNav=useMemo(()=>NAV.map(g=>({...g,items:g.items.filter(([n])=>n.toLowerCase().includes(query.toLowerCase()))})).filter(g=>g.items.length),[query]);
+  const closeCommand=useCallback(()=>setCommandOpen(false),[]);
   const go=name=>{moduleRequest.current++;setBusy(false);if(name!==active){setModuleData([]);setActive(name);}else if(!['Overview','Analytics','Settings'].includes(name)){loadModule(name);}setSidebarOpen(false);setError("");};
 
   async function signIn(email,password) {
@@ -138,10 +154,22 @@ export default function App() {
     finally { setBusy(false); }
   }
   function enterPreview(){previewApi.current=createDemoApi();setData(EMPTY);setRole("");setError("");setActive("Overview");setPreview(true);}
-  async function signOut(){if(preview){setPreview(false);previewApi.current=null;}else{await supabase.auth.signOut();setSession(null);}setRole("");setData(EMPTY);setModuleData([]);setSelected(null);setModal("");setLastSync(null);}
+  async function signOut(){
+    if(preview){setPreview(false);previewApi.current=null;}
+    else {
+      if(!window.confirm('Sign out of AnimePlex Admin on this browser?'))return;
+      try {
+        const {error}=await supabase.auth.signOut({scope:'local'});
+        if(error){const {data}=await supabase.auth.getSession();if(data?.session){setError('Could not sign out. Please try again.');return;}}
+        setSession(null);
+      }catch(error){setError(error.message || 'Could not sign out. Please try again.');return;}
+    }
+    setRole("");setData(EMPTY);setModuleData([]);setSelected(null);setModal("");setLastSync(null);setCommandOpen(false);
+  }
 
   if(!isSupabaseConfigured && !preview) return <SetupScreen onPreview={enterPreview}/>;
   if(authLoading && !preview) return <div className="auth-screen"><div className="auth-card"><div className="brand-mark"><img src="/animeplex-logo.png" alt="AnimePlex"/></div><p>Loading secure session…</p></div></div>;
+  if(!currentSession && authIssue) return <SessionRecovery message={authIssue} retry={()=>{setAuthLoading(true);sessionObserver.current?.restore();}} signIn={()=>setAuthIssue("")}/>;
   if(!currentSession) return <LoginScreen onSubmit={signIn} onPreview={enterPreview} busy={busy} error={error}/>;
 
   const intro={
@@ -188,7 +216,7 @@ export default function App() {
     </aside>
 
     <main className="main-area">
-      <header className="topbar"><div className="topbar-left"><button className="mobile-menu" aria-label="Open menu" onClick={()=>setSidebarOpen(true)}><Menu size={19}/></button><div className="breadcrumbs"><span>Workspace</span><ChevronRight size={14}/><strong>{active}</strong></div></div><div className="topbar-actions"><div className={preview?'environment preview-environment':'environment'}><i/> {preview?'Preview · sample data':error?'Connection issue':lastSync?(autoRefresh?'Live · 30s':'Refresh paused'):'Connecting…'}</div><IconButton label="Refresh data" onClick={refreshCurrent}><RefreshCw size={16}/></IconButton><IconButton label="Toggle theme" onClick={()=>setDark(!dark)}>{dark?<Moon size={17}/>:<Sparkles size={17}/>}</IconButton><span className="top-divider"/><div className="top-avatar">{preview?'A':(currentSession.user.email||"AD").slice(0,2).toUpperCase()}</div></div></header>
+      <header className="topbar"><div className="topbar-left"><button className="mobile-menu" aria-label="Open menu" onClick={()=>setSidebarOpen(true)}><Menu size={19}/></button><div className="breadcrumbs"><span>Workspace</span><ChevronRight size={14}/><strong>{active}</strong></div></div><div className="topbar-actions"><button className="global-search" aria-label="Search dashboard pages" onClick={()=>setCommandOpen(true)}><Search size={16}/><span>Search workspace</span><kbd>⌘ K</kbd></button><div className={preview?'environment preview-environment':'environment'}><i/> {preview?'Preview · sample data':error?'Connection issue':lastSync?(autoRefresh?'Live · 30s':'Refresh paused'):'Connecting…'}</div><IconButton label="Refresh data" onClick={refreshCurrent}><RefreshCw size={16}/></IconButton><IconButton label="Toggle theme" onClick={()=>setDark(!dark)}>{dark?<Moon size={17}/>:<Sparkles size={17}/>}</IconButton><span className="top-divider"/><div className="top-avatar">{preview?'A':(currentSession.user.email||"AD").slice(0,2).toUpperCase()}</div></div></header>
       <div className="page-content">
         {preview&&<div className="preview-banner"><Sparkles size={16}/><span><strong>Preview mode.</strong> Sample data resets when you reload or exit; no app or database is connected.</span><button onClick={signOut}>Exit preview</button></div>}
         <div className="page-heading"><div><div className="eyebrow"><span className="eyebrow-line"/> {active==='Overview'?'YOUR CONTROL CENTER':'ANIMEPLEX STUDIO'}</div><h1>{active==="Overview"?`Good ${greeting}, ${displayName}`:active}{active==='Overview'&&<span className="heading-spark"> ✦</span>}</h1><p>{intro}</p></div><div className="heading-actions"><button className="button button-quiet" onClick={refreshCurrent} disabled={busy}><RefreshCw size={15}/> {busy?"Syncing…":"Refresh"}</button>{canRelease&&(active==="Overview"||active==="OTA Updates")&&<button className="button button-primary" onClick={()=>{setSelected(null);setModal("release");}}><Plus size={16}/> New release</button>}{canAnnounce&&active==="Announcements"&&<button className="button button-primary" onClick={()=>{setSelected(null);setModal("announcement");}}><Plus size={16}/> New announcement</button>}{canEdit&&active==="Content"&&<button className="button button-primary" onClick={()=>{setSelected(null);setModal("content");}}><Plus size={16}/> Add featured title</button>}</div></div>
@@ -203,7 +231,7 @@ export default function App() {
           active==="Announcements"?<AnnouncementsPage items={moduleData} api={api} refresh={()=>loadModule(active)} setSelected={setSelected} setModal={setModal} canEdit={canAnnounce}/>:
           active==="Content"?<ContentPage items={moduleData} api={api} refresh={()=>loadModule("Content")} notify={notify} setSelected={setSelected} setModal={setModal} canEdit={canEdit}/>:
           active==="App Configuration"?<ConfigPage items={moduleData} api={api} refresh={()=>loadModule(active)} notify={notify} canEdit={canEdit}/>:
-          active==="Settings"?<DashboardPreferences dark={dark} setDark={setDark} accent={accent} setAccent={setAccent} autoRefresh={autoRefresh} setAutoRefresh={setAutoRefresh}/>:
+          active==="Settings"?<DashboardPreferences dark={dark} setDark={setDark} accent={accent} setAccent={setAccent} autoRefresh={autoRefresh} setAutoRefresh={setAutoRefresh} preview={preview} email={currentSession.user.email} onSignOut={signOut}/>:
           active==="Backups"?<BackupsPage items={moduleData}/>:
           active==="Logs & Audit"?<AuditPage items={moduleData}/>:
           active==="Admin Access"?<AdminsPage items={moduleData} api={api} refresh={()=>loadModule(active)} notify={notify} isOwner={role==='owner'}/>:
@@ -212,6 +240,8 @@ export default function App() {
         <footer className="footer"><span>© 2026 AnimePlex Admin</span><span><i className="footer-status"/> {preview?'Preview only':lastSync?'Authenticated API':'Waiting for connection'} <b>·</b> {preview?'Sample data':currentSession.user.email}</span></footer>
       </div>
     </main>
+    <MobileNavigation active={active} go={go} openMenu={()=>setSidebarOpen(true)}/>
+    {commandOpen&&<CommandPalette groups={NAV} onClose={closeCommand} onNavigate={go}/>}
     {modal==="release"&&<ReleaseModal close={()=>setModal("")} api={api} notify={notify} refresh={()=>active==='OTA Updates'?loadModule('OTA Updates'):refresh()} preview={preview}/>}
     {modal==="announcement"&&<AnnouncementModal selected={selected} close={()=>setModal("")} api={api} notify={notify} refresh={()=>loadModule("Announcements")}/>}{modal==="content"&&<ContentModal selected={selected} close={()=>setModal("")} api={api} notify={notify} refresh={()=>loadModule("Content")}/>}
     {toast&&<div className="toast"><CheckCircle2 size={17}/>{toast}<button onClick={()=>setToast("")}><X size={14}/></button></div>}
@@ -220,10 +250,12 @@ export default function App() {
 
 function LoginScreen({onSubmit,onPreview,busy,error}) {
  const [email,setEmail]=useState("");const [password,setPassword]=useState("");
- return <div className="auth-screen"><div className="auth-layout"><AuthShowcase/><div className="auth-card"><div className="auth-label">WELCOME BACK</div><h1>Sign in to your studio.</h1><p>Your AnimePlex controls, all in one place.</p><form onSubmit={e=>{e.preventDefault();onSubmit(email,password);}}><label>Email address<input type="email" value={email} onChange={e=>setEmail(e.target.value)} required autoComplete="username" placeholder="admin@example.com"/></label><label>Password<input type="password" value={password} onChange={e=>setPassword(e.target.value)} required autoComplete="current-password" placeholder="Your password"/></label>{error&&<div className="auth-error">{error}</div>}<button className="button button-primary auth-submit" disabled={busy}>{busy?"Signing in…":"Sign in securely"} <ChevronRight size={16}/></button></form><button className="auth-preview-link" type="button" onClick={onPreview}>Explore a sample dashboard <ChevronRight size={14}/></button><div className="auth-foot"><LockKeyhole size={13}/> Access is restricted to authorized administrators.</div></div></div></div>;
+ return <div className="auth-screen"><div className="auth-layout"><AuthShowcase/><div className="auth-card"><div className="auth-label">WELCOME BACK</div><h1>Sign in to your studio.</h1><p>Your AnimePlex controls, all in one place.</p><form onSubmit={e=>{e.preventDefault();onSubmit(email,password);}}><label>Email address<input type="email" value={email} onChange={e=>setEmail(e.target.value)} required autoComplete="username" placeholder="admin@example.com"/></label><label>Password<input type="password" value={password} onChange={e=>setPassword(e.target.value)} required autoComplete="current-password" placeholder="Your password"/></label>{error&&<div className="auth-error">{error}</div>}<button className="button button-primary auth-submit" disabled={busy}>{busy?"Signing in…":"Sign in securely"} <ChevronRight size={16}/></button></form><div className="stay-signed"><ShieldCheck size={15}/><span>Stay signed in on this browser. Your session refreshes automatically.</span></div><button className="auth-preview-link" type="button" onClick={onPreview}>Explore a sample dashboard <ChevronRight size={14}/></button><div className="auth-foot"><LockKeyhole size={13}/> Access is restricted to authorized administrators.</div></div></div></div>;
 }
 function AuthShowcase(){return <div className="auth-showcase"><div className="auth-brand"><img src="/animeplex-logo.png" alt="AnimePlex logo"/><span>Anime<strong>Plex</strong><small>ADMIN STUDIO</small></span></div><div className="showcase-copy"><div className="eyebrow">YOUR WORLD, IN CONTROL</div><h2>A beautiful home for everything AnimePlex.</h2><p>Manage your app, your content, and your community from one thoughtful workspace.</p></div><div className="showcase-foot"><span>✦</span> Built for the stories you love.</div></div>;}
 function SetupScreen({onPreview}){return <div className="auth-screen"><div className="auth-layout"><AuthShowcase/><div className="auth-card"><div className="auth-label">YOUR WORKSPACE IS READY</div><h1>Explore your studio.</h1><p>Take a look around with sample data. Connect your services when you are ready.</p><button className="button button-primary auth-submit" type="button" onClick={onPreview}>Open dashboard preview <ChevronRight size={16}/></button><div className="setup-details"><strong>Connect later</strong><span>Configure your Supabase and Vercel settings to enable secure live operations.</span><a href="https://github.com/Abhishekred/Animeplex-v1-admin/blob/Abhishekred/ONLINE-DASHBOARD/docs/ADMIN_SETUP.md" target="_blank" rel="noreferrer">Read the setup guide <ExternalLink size={13}/></a></div><div className="auth-foot"><LockKeyhole size={13}/> Preview data is temporary and does not connect your app.</div></div></div></div>;}
+
+function SessionRecovery({message,retry,signIn}){return <div className="auth-screen"><div className="auth-layout"><AuthShowcase/><div className="auth-card"><div className="auth-label">YOUR SESSION</div><h1>Let's reconnect.</h1><p>{message}</p><div className="recovery-card"><Wifi size={18}/><span>Your saved session can be restored when the connection is available.</span></div><button className="button button-primary auth-submit" type="button" onClick={retry}><RefreshCw size={16}/> Retry connection</button><button className="auth-preview-link" type="button" onClick={signIn}>Sign in again <ChevronRight size={14}/></button></div></div></div>;}
 
 function Overview({stats,data,go,busy,preview,api,refresh,notify,canEdit,lastSync,autoRefresh}) {
  const [saving,setSaving]=useState('');
