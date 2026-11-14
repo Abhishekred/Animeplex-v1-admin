@@ -1,6 +1,6 @@
 # AnimePlex Admin Studio
 
-A standalone React/Vite administration dashboard for AnimePlex, designed to use Vercel and Supabase when configured. It also includes an isolated sample-data preview that requires no credentials.
+A standalone React/Vite administration dashboard for AnimePlex using Supabase authentication and a Vercel admin API.
 
 ## Features
 - Secure Supabase email/password sign-in; no public admin signup
@@ -19,7 +19,8 @@ A standalone React/Vite administration dashboard for AnimePlex, designed to use 
 - Admin role management and audit trail
 - Backup metadata view without exposing private backup payloads
 - Infrastructure health probes
-- Local-only dashboard preferences and an in-memory, clearly marked sample preview
+- Local-only dashboard preferences and authenticated access
+- Change the signed-in administrator's email or password from Settings after verifying the current password
 - Quick dashboard search (Ctrl/⌘ + K) and a mobile navigation dock
 
 ## Run locally
@@ -29,10 +30,12 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Without environment variables, the setup screen provides **Open dashboard preview**. Preview changes affect only temporary in-memory sample records and are reset on reload or exit; they never reach a backend. The Vite development server alone does not run the production Vercel API routes. Run `npm test` and `npm run build` for local checks.
+The dashboard requires its Supabase environment variables and an active administrator membership. The Vite development server alone does not run the production Vercel API routes. Run `npm test` and `npm run build` for local checks.
 
 ## Admin session
-After sign-in, Supabase stores the session in the current browser and refreshes it automatically. The app retains the existing Supabase storage key so a deployment does not intentionally sign users out. A temporary network problem shows a reconnect option instead of clearing the session; signing out explicitly affects the current browser session. Browser storage clearing, private browsing, a revoked session, password changes or project-enforced expiry can still require a new sign-in. Preview mode is temporary and is not an authenticated session.
+After sign-in, Supabase stores the session in the current browser and refreshes it automatically. The app retains the existing Supabase storage key so a deployment does not intentionally sign users out. A temporary network problem shows a reconnect option instead of clearing the session; signing out explicitly affects the current browser session. Browser storage clearing, private browsing, a revoked session, password changes or project-enforced expiry can still require a new sign-in.
+
+In Settings, an active administrator can change their own email or password after the server verifies their current password. The server never logs credential values. A change may require signing in again, depending on Supabase session settings. No default credentials or secret key belong in the repository.
 
 ## Required setup
 Read [Admin setup](docs/ADMIN_SETUP.md) before connecting the Supabase project. Apply the SQL migration, bootstrap your first owner, and configure the Vercel environment variables.
