@@ -148,7 +148,7 @@ export default function App() {
   async function signIn(email,password) {
     setBusy(true);setError("");
     try {
-      const {error}=await supabase.auth.signInWithPassword({email,password});
+      const {error}=await supabase.auth.signInWithPassword({email: email.trim().toLowerCase(),password});
       if(error)setError(error.message);
     } catch(error) { setError(error.message || "Could not sign in. Try again."); }
     finally { setBusy(false); }
@@ -167,10 +167,10 @@ export default function App() {
     setRole("");setData(EMPTY);setModuleData([]);setSelected(null);setModal("");setLastSync(null);setCommandOpen(false);
   }
 
-  if(!isSupabaseConfigured && !preview) return <SetupScreen onPreview={enterPreview}/>;
+  if(!isSupabaseConfigured && !preview) return <SetupScreen/>;
   if(authLoading && !preview) return <div className="auth-screen"><div className="auth-card"><div className="brand-mark"><img src="/animeplex-logo.png" alt="AnimePlex"/></div><p>Loading secure session…</p></div></div>;
   if(!currentSession && authIssue) return <SessionRecovery message={authIssue} retry={()=>{setAuthLoading(true);sessionObserver.current?.restore();}} signIn={()=>setAuthIssue("")}/>;
-  if(!currentSession) return <LoginScreen onSubmit={signIn} onPreview={enterPreview} busy={busy} error={error}/>;
+  if(!currentSession) return <LoginScreen onSubmit={signIn} busy={busy} error={error}/>;
 
   const intro={
     "Overview":"Your AnimePlex ecosystem at a glance.",
@@ -248,12 +248,12 @@ export default function App() {
   </div>;
 }
 
-function LoginScreen({onSubmit,onPreview,busy,error}) {
- const [email,setEmail]=useState("");const [password,setPassword]=useState("");
- return <div className="auth-screen"><div className="auth-layout"><AuthShowcase/><div className="auth-card"><div className="auth-label">WELCOME BACK</div><h1>Sign in to your studio.</h1><p>Your AnimePlex controls, all in one place.</p><form onSubmit={e=>{e.preventDefault();onSubmit(email,password);}}><label>Email address<input type="email" value={email} onChange={e=>setEmail(e.target.value)} required autoComplete="username" placeholder="admin@example.com"/></label><label>Password<input type="password" value={password} onChange={e=>setPassword(e.target.value)} required autoComplete="current-password" placeholder="Your password"/></label>{error&&<div className="auth-error">{error}</div>}<button className="button button-primary auth-submit" disabled={busy}>{busy?"Signing in…":"Sign in securely"} <ChevronRight size={16}/></button></form><div className="stay-signed"><ShieldCheck size={15}/><span>Stay signed in on this browser. Your session refreshes automatically.</span></div><button className="auth-preview-link" type="button" onClick={onPreview}>Explore a sample dashboard <ChevronRight size={14}/></button><div className="auth-foot"><LockKeyhole size={13}/> Access is restricted to authorized administrators.</div></div></div></div>;
+function LoginScreen({onSubmit,busy,error}) {
+ const [email,setEmail]=useState("Animeplex@gmail.com");const [password,setPassword]=useState("");
+ return <div className="auth-screen"><div className="auth-layout"><AuthShowcase/><div className="auth-card"><div className="auth-label">WELCOME BACK</div><h1>Sign in to your studio.</h1><p>Your AnimePlex controls, all in one place.</p><form onSubmit={e=>{e.preventDefault();onSubmit(email,password);}}><label>Email address<input type="email" value={email} onChange={e=>setEmail(e.target.value)} required autoComplete="username" placeholder="Animeplex@gmail.com"/></label><label>Password<input type="password" value={password} onChange={e=>setPassword(e.target.value)} required autoComplete="current-password" placeholder="Your password"/></label>{error&&<div className="auth-error">{error}</div>}<button className="button button-primary auth-submit" disabled={busy}>{busy?"Signing in…":"Sign in securely"} <ChevronRight size={16}/></button></form><div className="stay-signed"><ShieldCheck size={15}/><span>Stay signed in on this browser. Your session refreshes automatically.</span></div><div className="auth-foot"><LockKeyhole size={13}/> Access is restricted to authorized administrators.</div></div></div></div>;
 }
 function AuthShowcase(){return <div className="auth-showcase"><div className="auth-brand"><img src="/animeplex-logo.png" alt="AnimePlex logo"/><span>Anime<strong>Plex</strong><small>ADMIN STUDIO</small></span></div><div className="showcase-copy"><div className="eyebrow">YOUR WORLD, IN CONTROL</div><h2>A beautiful home for everything AnimePlex.</h2><p>Manage your app, your content, and your community from one thoughtful workspace.</p></div><div className="showcase-foot"><span>✦</span> Built for the stories you love.</div></div>;}
-function SetupScreen({onPreview}){return <div className="auth-screen"><div className="auth-layout"><AuthShowcase/><div className="auth-card"><div className="auth-label">YOUR WORKSPACE IS READY</div><h1>Explore your studio.</h1><p>Take a look around with sample data. Connect your services when you are ready.</p><button className="button button-primary auth-submit" type="button" onClick={onPreview}>Open dashboard preview <ChevronRight size={16}/></button><div className="setup-details"><strong>Connect later</strong><span>Configure your Supabase and Vercel settings to enable secure live operations.</span><a href="https://github.com/Abhishekred/Animeplex-v1-admin/blob/Abhishekred/ONLINE-DASHBOARD/docs/ADMIN_SETUP.md" target="_blank" rel="noreferrer">Read the setup guide <ExternalLink size={13}/></a></div><div className="auth-foot"><LockKeyhole size={13}/> Preview data is temporary and does not connect your app.</div></div></div></div>;}
+function SetupScreen(){return <div className="auth-screen"><div className="auth-layout"><AuthShowcase/><div className="auth-card"><div className="auth-label">CONFIGURATION REQUIRED</div><h1>Secure login setup.</h1><p>The administrator must configure the Supabase connection before signing in.</p><div className="setup-details"><strong>Supabase Auth setup</strong><span>Create and confirm the administrator in Supabase Auth, grant its role in admin_members, and configure the Vercel server environment.</span><a href="https://supabase.com/dashboard/project/iwiujqjipotwvigvaaid/auth/users" target="_blank" rel="noreferrer">Open Supabase Auth <ExternalLink size={13}/></a></div><div className="auth-foot"><LockKeyhole size={13}/> Admin access is restricted to authorized accounts.</div></div></div></div>;}
 
 function SessionRecovery({message,retry,signIn}){return <div className="auth-screen"><div className="auth-layout"><AuthShowcase/><div className="auth-card"><div className="auth-label">YOUR SESSION</div><h1>Let's reconnect.</h1><p>{message}</p><div className="recovery-card"><Wifi size={18}/><span>Your saved session can be restored when the connection is available.</span></div><button className="button button-primary auth-submit" type="button" onClick={retry}><RefreshCw size={16}/> Retry connection</button><button className="auth-preview-link" type="button" onClick={signIn}>Sign in again <ChevronRight size={14}/></button></div></div></div>;}
 
