@@ -1,6 +1,7 @@
 import { audit, fail, requireAdmin, send } from "../_lib/admin.js";
 import { validateSetting } from "../_lib/config.js";
 import { auditWindow, buildAuditTrend } from "../_lib/analytics.js";
+import { updateOwnCredentials, verificationClient } from "../_lib/account.js";
 
 const roles = ["owner", "admin", "release_manager", "moderator", "auditor"];
 const writeRoles = ["owner", "admin"];
@@ -8,11 +9,15 @@ const releaseRoles = ["owner", "admin", "release_manager"];
 
 export default async function handler(req, res) {
   const resource = String(req.query.resource || "").toLowerCase();
-  const roleAllow = resource === "releases" ? releaseRoles : resource === "announcements" ? ["owner","admin","moderator"] : writeRoles;
+  const roleAllow = resource === "account" ? roles : resource === "releases" ? releaseRoles : resource === "announcements" ? ["owner","admin","moderator"] : writeRoles;
   const ctx = await requireAdmin(req, res, req.method === "GET" ? [] : roleAllow);
   if (!ctx) return;
   const { supabase, user, role } = ctx;
   try {
+    if (resource === "account" && req.method === "POST") {
+      const result = await updateOwnCredentials(ctx, req.body || {}, { makeVerifier: verificationClient, recordAudit: audit });
+      return send(res, result.status, result.error ? { error: result.error } : { ok: true, emailChanged: result.emailChanged, passwordChanged: result.passwordChanged });
+    }
     if (resource === "dashboard" && req.method === "GET") {
       const now = Date.now();
       const [profiles, releases, announcements, backups, admins, recent, auditHistory, quickSettings] = await Promise.all([
