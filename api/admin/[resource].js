@@ -11,7 +11,9 @@ const releaseRoles = ["owner", "admin", "release_manager"];
 export default async function handler(req, res) {
   const resource = String(req.query.resource || "").toLowerCase();
   const roleAllow = resource === "account" ? roles : resource === "releases" ? releaseRoles : resource === "announcements" ? ["owner","admin","moderator"] : writeRoles;
-  const ctx = await requireAdmin(req, res, req.method === "GET" ? [] : roleAllow);
+  const sensitiveReadRoles = ["users", "admins", "backups", "audit", "devices"];
+  const readAllow = sensitiveReadRoles.includes(resource) ? ["owner", "admin", "auditor"] : [];
+  const ctx = await requireAdmin(req, res, req.method === "GET" ? readAllow : roleAllow);
   if (!ctx) return;
   const { supabase, user, role } = ctx;
   try {
@@ -228,7 +230,14 @@ export default async function handler(req, res) {
           return send(res, 200, { path, token: data.token, signedUrl: data.signedUrl });
         }
         if (body.action === "create") {
-          if (!body.version || !Number.isInteger(Number(body.version_code)) || Number(body.version_code) <= 0 || !body.storage_path || !/^[a-f0-9]{64}$/i.test(String(body.sha256||""))) return send(res, 400, { error: "Version, positive integer version code, uploaded APK and SHA-256 checksum are required." });
+          if (!body.version || !Number.isInteger(Number(body.version_code)) || Number(body.version_code) <= 0 || !/^releases\/[a-f0-9-]{36}\/[a-zA-Z0-9._-]+\.apk$/i.test(String(body.storage_path || "")) || !/^[a-f0-9]{64}$/i.test(String(body.sha256||""))) return send(res, 400, { error: "Version, positive integer version code, uploaded APK and SHA-256 checksum are required." });
+          const folder = String(body.storage_path).split("/").slice(0, 2).join("/");
+          const filename = String(body.storage_path).split("/")[2];
+          const { data: uploadedFiles, error: storageError } = await supabase.storage.from("animeplex-releases").list(folder, { limit: 100 });
+          if (storageError) throw storageError;
+          if (!(uploadedFiles || []).some(file => file.name === filename)) {
+            return send(res, 400, { error: "Upload the APK before creating a release." });
+          }
           const row = {
             version: String(body.version).slice(0, 40), version_code: Number(body.version_code),
             platform: body.platform === "android_tv" ? "android_tv" : "android",
@@ -256,9 +265,9 @@ export default async function handler(req, res) {
             // Transition only once: retries must not rebroadcast a release.
             const { data: published, error } = await supabase.from("app_releases")
               .update({ status, download_url: urlData.publicUrl, published_at: new Date().toISOString() })
-              .eq("id",id).neq("status","published").select("id,version,channel,platform").maybeSingle();
+              .eq("id",id).eq("status","draft").select("id,version,channel,platform").maybeSingle();
             if (error) throw error;
-            if (!published) return send(res, 409, { error: "Release is already published." });
+            if (!published) return send(res, 409, { error: "Only draft releases can be published." });
             // Notification failures must not roll back a successfully published APK.
             // The audit entry exposes failed sends for an admin to investigate.
             try {
