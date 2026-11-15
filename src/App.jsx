@@ -311,7 +311,35 @@ function ContentModal({selected,close,api,notify,refresh}) {
 function AnnouncementsPage({items,api,refresh,setSelected,setModal,canEdit}) {
  async function toggle(item){try{await api("announcements","PATCH",{id:item.id,is_active:!item.is_active});refresh();}catch(e){alert(e.message);}}
  async function remove(item){if(!confirm("Delete this announcement?"))return;try{await api("announcements","DELETE",{id:item.id});refresh();}catch(e){alert(e.message);}}
- return <section className="panel data-panel"><div className="panel-heading"><div><h3>App announcements</h3><p>Messages stored in the admin announcement registry.</p></div>{canEdit&&<button className="button button-primary" onClick={()=>{setSelected(null);setModal("announcement");}}><Plus size={15}/> New announcement</button>}</div><div className="announcement-list">{items.map(item=><div className="announcement-row" key={item.id}><div className={"announcement-type "+item.type}>{item.type==="warning"?<AlertTriangle size={17}/>:<Bell size={17}/>}</div><div className="announcement-copy"><strong>{item.title}</strong><p>{item.body}</p><small>{fmt(item.created_at)} · {item.type}</small></div><span className={"release-status "+(item.is_active?"published":"paused")}><i/>{item.is_active?"Active":"Disabled"}</span><div className="table-actions">{canEdit&&<><button onClick={()=>{setSelected(item);setModal("announcement");}}>Edit</button><button onClick={()=>toggle(item)}>{item.is_active?"Disable":"Enable"}</button><button className="danger-text" onClick={()=>remove(item)}>Delete</button></>}</div></div>)}{!items.length&&<div className="empty-state">No announcements yet. Create one to start preparing user-facing messages.</div>}</div><div className="notice-box warning"><AlertTriangle size={17}/><span>Updated AnimePlex builds read announcements directly from the Admin API. Existing installed builds must update first.</span></div></section>;
+ return <div className="settings-layout"><section className="panel data-panel"><div className="panel-heading"><div><h3>App announcements</h3><p>Messages stored in the admin announcement registry.</p></div>{canEdit&&<button className="button button-primary" onClick={()=>{setSelected(null);setModal("announcement");}}><Plus size={15}/> New announcement</button>}</div><div className="announcement-list">{items.map(item=><div className="announcement-row" key={item.id}><div className={"announcement-type "+item.type}>{item.type==="warning"?<AlertTriangle size={17}/>:<Bell size={17}/>}</div><div className="announcement-copy"><strong>{item.title}</strong><p>{item.body}</p><small>{fmt(item.created_at)} · {item.type}</small></div><span className={"release-status "+(item.is_active?"published":"paused")}><i/>{item.is_active?"Active":"Disabled"}</span><div className="table-actions">{canEdit&&<><button onClick={()=>{setSelected(item);setModal("announcement");}}>Edit</button><button onClick={()=>toggle(item)}>{item.is_active?"Disable":"Enable"}</button><button className="danger-text" onClick={()=>remove(item)}>Delete</button></>}</div></div>)}{!items.length&&<div className="empty-state">No announcements yet. Create one to start preparing user-facing messages.</div>}</div><div className="notice-box warning"><AlertTriangle size={17}/><span>Updated AnimePlex builds read announcements directly from the Admin API. Existing installed builds must update first.</span></div></section><PushBroadcastPanel api={api} canEdit={canEdit}/></div>;
+}
+
+
+function PushBroadcastPanel({api,canEdit}) {
+ const [title,setTitle]=useState("");
+ const [body,setBody]=useState("");
+ const [url,setUrl]=useState("");
+ const [sending,setSending]=useState(false);
+ const [result,setResult]=useState("");
+ async function submit(e) {
+  e.preventDefault();
+  if(!confirm("Send this push notification to all subscribed AnimePlex devices?"))return;
+  setSending(true);setResult("");
+  try {
+   await api("push","POST",{title,body,url});
+   setResult("Notification accepted by Firebase for broadcast.");
+   setTitle("");setBody("");setUrl("");
+  } catch(error) {setResult(error.message);}
+  finally {setSending(false);}
+ }
+ return <section className="panel data-panel"><div className="panel-heading"><div><h3>Firebase push broadcast</h3><p>Send a push notification to devices subscribed to the AnimePlex all-users topic.</p></div><Bell size={20}/></div>
+ <form className="modal-form" onSubmit={submit}>
+ <label><span className="field-label">Notification title</span><input className="text-input" maxLength="120" required value={title} onChange={e=>setTitle(e.target.value)} disabled={!canEdit||sending}/></label>
+ <label><span className="field-label">Message</span><textarea className="text-input textarea" maxLength="1000" required value={body} onChange={e=>setBody(e.target.value)} disabled={!canEdit||sending}/></label>
+ <label><span className="field-label">HTTPS action URL (optional)</span><input className="text-input" type="url" placeholder="https://…" value={url} onChange={e=>setUrl(e.target.value)} disabled={!canEdit||sending}/></label>
+ <button type="submit" className="button button-primary" disabled={!canEdit||sending}>{sending?"Sending…":"Send push to all users"}</button>
+ {result&&<p role="status" className="muted-copy">{result}</p>}
+ </form><div className="notice-box warning"><AlertTriangle size={17}/><span>Requires an installed Firebase-enabled app, notification permission, and network access. Only Owner/Admin can send. Firebase acceptance does not guarantee device delivery.</span></div></section>;
 }
 
 function ConfigPage({items,api,refresh,notify,canEdit}) {
