@@ -334,10 +334,11 @@ function PushBroadcastPanel({api,canEdit}) {
  }
  return <section className="panel data-panel"><div className="panel-heading"><div><h3>Firebase push broadcast</h3><p>Send a push notification to devices subscribed to the AnimePlex all-users topic.</p></div><Bell size={20}/></div>
  <form className="modal-form" onSubmit={submit}>
- <label><span className="field-label">Notification title</span><input className="text-input" maxLength="120" required value={title} onChange={e=>setTitle(e.target.value)} disabled={!canEdit||sending}/></label>
- <label><span className="field-label">Message</span><textarea className="text-input textarea" maxLength="1000" required value={body} onChange={e=>setBody(e.target.value)} disabled={!canEdit||sending}/></label>
- <label><span className="field-label">HTTPS action URL (optional)</span><input className="text-input" type="url" placeholder="https://…" value={url} onChange={e=>setUrl(e.target.value)} disabled={!canEdit||sending}/></label>
- <button type="submit" className="button button-primary" disabled={!canEdit||sending}>{sending?"Sending…":"Send push to all users"}</button>
+ <label><span className="field-label">Notification title</span><input className="text-input" maxLength="120" required value={title} onChange={e=>setTitle(e.target.value)} disabled={sending}/></label>
+ <label><span className="field-label">Message</span><textarea className="text-input textarea" maxLength="1000" required value={body} onChange={e=>setBody(e.target.value)} disabled={sending}/></label>
+ <label><span className="field-label">HTTPS action URL (optional)</span><input className="text-input" type="url" placeholder="https://…" value={url} onChange={e=>setUrl(e.target.value)} disabled={sending}/></label>
+ <button type="submit" className="button button-primary" disabled={sending}>{sending?"Sending…":"Send push to all users"}</button>
+ {!canEdit&&<p role="status" className="muted-copy">Sending is restricted to Owner/Admin accounts. You can draft a message, but your current account cannot send it. Check Admin Access for your assigned role.</p>}
  {result&&<p role="status" className="muted-copy">{result}</p>}
  </form><div className="notice-box warning"><AlertTriangle size={17}/><span>Requires an installed Firebase-enabled app, notification permission, and network access. Only Owner/Admin can send. Firebase acceptance does not guarantee device delivery.</span></div></section>;
 }
