@@ -1,7 +1,7 @@
 import { createSign } from "node:crypto";
 import { audit, requireAdmin, send } from "../_lib/admin.js";
 
-const TOPIC = "animeplex_all";
+const TOPIC = "all";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const SCOPE = "https://www.googleapis.com/auth/firebase.messaging";
 
@@ -72,7 +72,7 @@ export default async function handler(req, res) {
         topic: TOPIC,
         notification: { title, body },
         data: { type: "admin_broadcast", ...(link ? { url: link } : {}) },
-        android: { priority: "high", notification: { channel_id: "animeplex_announcements" } },
+        android: { priority: "high" },
       },
     };
     const response = await fetch(
