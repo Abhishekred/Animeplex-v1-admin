@@ -1,7 +1,7 @@
 import { serviceClient, send } from "../_lib/admin.js";
 
 // Public, read-only app configuration. Never expose arbitrary admin settings.
-const PUBLIC_KEYS = ["app_ui", "theme_preset", "feature_flags", "home_message", "extension_auto_updates_enabled", "episode_notifications_enabled", "chapter_notifications_enabled", "source_update_notifications_enabled", "announcements_enabled"];
+const PUBLIC_KEYS = ["app_ui", "theme_preset", "feature_flags", "home_message", "extension_auto_updates_enabled", "episode_notifications_enabled", "chapter_notifications_enabled", "source_update_notifications_enabled", "announcements_enabled", "about_website_url", "about_website_label", "about_website_subtitle", "about_website_visible"];
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
