@@ -38,7 +38,7 @@ const metric = report => Number(report.rows?.[0]?.metricValues?.[0]?.value || 0)
 export async function getFirebaseTelemetry() {
   const property = process.env.GA4_PROPERTY_ID?.trim();
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-  if (!property || !/^\\d+$/.test(property) || !raw) {
+  if (!property || !/^[0-9]+$/.test(property) || !raw) {
     return { configured: false, message: "Set GA4_PROPERTY_ID and FIREBASE_SERVICE_ACCOUNT_JSON to enable Firebase Analytics reports." };
   }
   try {
