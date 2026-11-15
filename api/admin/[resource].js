@@ -164,8 +164,36 @@ export default async function handler(req, res) {
         const { id, ...changes } = req.body || {};
         if (!id) return send(res, 400, { error: "Announcement id is required." });
         const patch = {};
-        if (changes.action_url) { try { const parsed = new URL(changes.action_url); if (!["http:","https:"].includes(parsed.protocol)) throw new Error(); } catch { return send(res, 400, { error: "Action URL must be a valid HTTP or HTTPS URL." }); } }
-        for (const key of ["title","body","type","is_active","action_url"]) if (key in changes) patch[key] = changes[key];
+        if ("title" in changes) {
+          if (typeof changes.title !== "string" || !changes.title.trim() || changes.title.trim().length > 120)
+            return send(res, 400, { error: "Title is required and must be under 120 characters." });
+          patch.title = changes.title.trim();
+        }
+        if ("body" in changes) {
+          if (typeof changes.body !== "string" || changes.body.length > 5000)
+            return send(res, 400, { error: "Message must be text under 5000 characters." });
+          patch.body = changes.body;
+        }
+        if ("type" in changes) {
+          if (!["info", "warning", "update"].includes(changes.type))
+            return send(res, 400, { error: "Invalid announcement type." });
+          patch.type = changes.type;
+        }
+        if ("is_active" in changes) {
+          if (typeof changes.is_active !== "boolean")
+            return send(res, 400, { error: "is_active must be boolean." });
+          patch.is_active = changes.is_active;
+        }
+        if ("action_url" in changes) {
+          if (changes.action_url !== null && typeof changes.action_url !== "string")
+            return send(res, 400, { error: "Invalid action URL." });
+          if (changes.action_url) {
+            try { const parsed = new URL(changes.action_url); if (!["http:", "https:"].includes(parsed.protocol)) throw new Error(); }
+            catch { return send(res, 400, { error: "Action URL must be a valid HTTP or HTTPS URL." }); }
+          }
+          patch.action_url = changes.action_url || null;
+        }
+        if (!Object.keys(patch).length) return send(res, 400, { error: "No announcement changes provided." });
         patch.updated_at = new Date().toISOString();
         const { data, error } = await supabase.from("app_announcements").update(patch).eq("id", id).select("*").single();
         if (error) throw error;
