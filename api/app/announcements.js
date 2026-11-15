@@ -8,7 +8,7 @@ export default async function handler(req,res) {
   try {
     const {data,error}=await serviceClient().from("app_announcements")
       .select("id,title,body,type,action_url,updated_at")
-      .eq("is_active",true).order("created_at",{ascending:false}).limit(30);
+      .eq("is_active",true).order("created_at",{ascending:false}).limit(1000);
     if(error) throw error;
     return res.status(200).json({ announcements: (data || []).map(row => ({
       id: row.id,
