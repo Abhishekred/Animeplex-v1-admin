@@ -1,3 +1,4 @@
+import { sendTopicPush } from "../_lib/firebase_push.js";
 import { audit, fail, requireAdmin, send } from "../_lib/admin.js";
 import { validateSetting } from "../_lib/config.js";
 import { auditWindow, buildAuditTrend } from "../_lib/analytics.js";
@@ -252,8 +253,26 @@ export default async function handler(req, res) {
             if (latestError) throw latestError;
             if (latest && Number(release.version_code) <= Number(latest.version_code)) return send(res, 409, { error: "Version code must be greater than the currently published version in this channel." });
             const { data: urlData } = supabase.storage.from("animeplex-releases").getPublicUrl(release.storage_path);
-            const { error } = await supabase.from("app_releases").update({ status, download_url: urlData.publicUrl, published_at: new Date().toISOString() }).eq("id",id);
+            // Transition only once: retries must not rebroadcast a release.
+            const { data: published, error } = await supabase.from("app_releases")
+              .update({ status, download_url: urlData.publicUrl, published_at: new Date().toISOString() })
+              .eq("id",id).neq("status","published").select("id,version,channel,platform").maybeSingle();
             if (error) throw error;
+            if (!published) return send(res, 409, { error: "Release is already published." });
+            // Notification failures must not roll back a successfully published APK.
+            // The audit entry exposes failed sends for an admin to investigate.
+            try {
+              const messageId = await sendTopicPush({
+                topic: "app_updates",
+                title: "AnimePlex update available",
+                body: "Version " + published.version + " is now available (" + published.channel + ").",
+                data: { type: "app_update", release_id: id, version: published.version, channel: published.channel, platform: published.platform },
+              });
+              await audit(ctx, "release.push.sent", "release", id, { messageId });
+            } catch (pushError) {
+              console.error("[release-push]", pushError.message);
+              await audit(ctx, "release.push.failed", "release", id, { error: String(pushError.message).slice(0,160) });
+            }
           } else {
             const { data: target, error: targetError } = await supabase.from("app_releases").select("id,status,channel,platform,version_code").eq("id",id).single();
             if (targetError) throw targetError;
