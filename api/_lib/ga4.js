@@ -51,7 +51,7 @@ export async function getFirebaseTelemetry() {
       })),
       runReport(property, token, {
         dateRanges: [{ startDate: "6daysAgo", endDate: "today" }],
-        dimensions: [{ name: "customEvent:outcome" }],
+        dimensions: [{ name: "eventName" }],
         metrics: [{ name: "eventCount" }],
         dimensionFilter: { filter: { fieldName: "eventName", stringFilter: { value: "source_load" } } },
         limit: 20,
@@ -71,6 +71,6 @@ export async function getFirebaseTelemetry() {
       playbackEvents: (playback.rows || []).map(row => ({ event: row.dimensionValues?.[0]?.value || "unknown", count: Number(row.metricValues?.[0]?.value || 0) })),
     };
   } catch {
-    return { configured: true, unavailable: true, message: "GA4 reports unavailable. Check property ID, linked Firebase project, GA4 access and registered event dimensions." };
+    return { configured: true, unavailable: true, message: "GA4 reports unavailable. Check property ID, linked Firebase project and GA4 access." };
   }
 }
