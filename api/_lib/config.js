@@ -7,7 +7,7 @@ const TEXT_LIMITS = {
   default_source: 120,
 };
 const URL_KEYS = new Set(['support_url', 'discord_url', 'logo_url', 'splash_url']);
-const BOOLEAN_KEYS = new Set(['maintenance_mode', 'community_popup_enabled']);
+const BOOLEAN_KEYS = new Set(['maintenance_mode', 'community_popup_enabled', 'extension_auto_updates_enabled', 'episode_notifications_enabled', 'chapter_notifications_enabled', 'source_update_notifications_enabled', 'announcements_enabled']);
 const THEME_IDS = new Set(THEMES.map(theme => theme.id));
 
 function safeUrl(value, label) {
