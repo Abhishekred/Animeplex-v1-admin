@@ -20,3 +20,20 @@ export function buildAuditTrend(rows, now = Date.now(), limit = 1000) {
   }
   return { days, total: days.reduce((sum, day) => sum + day.count, 0), truncated: rows.length >= limit };
 }
+
+/** Seven-day signup trend from bounded profile records; clearly report truncation. */
+export function buildSignupTrend(rows, now = Date.now(), limit = 1000) {
+  const { today } = auditWindow(now);
+  const days = Array.from({ length: 7 }, (_, index) => ({
+    date: new Date(today - (6 - index) * 86400000).toISOString().slice(0, 10),
+    count: 0,
+  }));
+  const byDay = new Map(days.map(day => [day.date, day]));
+  for (const row of rows) {
+    const time = Date.parse(row?.created_at);
+    if (!Number.isFinite(time)) continue;
+    const day = byDay.get(new Date(time).toISOString().slice(0, 10));
+    if (day) day.count += 1;
+  }
+  return { days, total: days.reduce((sum, day) => sum + day.count, 0), truncated: rows.length >= limit };
+}
