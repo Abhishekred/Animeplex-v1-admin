@@ -1,4 +1,5 @@
 import { sendTopicPush } from "../_lib/firebase_push.js";
+import { getFirebaseTelemetry } from "../_lib/ga4.js";
 import { audit, fail, requireAdmin, send } from "../_lib/admin.js";
 import { validateSetting } from "../_lib/config.js";
 import { auditWindow, buildAuditTrend, buildSignupTrend } from "../_lib/analytics.js";
@@ -11,7 +12,7 @@ const releaseRoles = ["owner", "admin", "release_manager"];
 export default async function handler(req, res) {
   const resource = String(req.query.resource || "").toLowerCase();
   const roleAllow = resource === "account" ? roles : resource === "releases" ? releaseRoles : resource === "announcements" ? ["owner","admin","moderator"] : writeRoles;
-  const sensitiveReadRoles = ["users", "admins", "backups", "audit", "devices"];
+  const sensitiveReadRoles = ["users", "admins", "backups", "audit", "devices", "telemetry"];
   const readAllow = sensitiveReadRoles.includes(resource) ? ["owner", "admin", "auditor"] : [];
   const ctx = await requireAdmin(req, res, req.method === "GET" ? readAllow : roleAllow);
   if (!ctx) return;
@@ -20,6 +21,10 @@ export default async function handler(req, res) {
     if (resource === "account" && req.method === "POST") {
       const result = await updateOwnCredentials(ctx, req.body || {}, { makeVerifier: verificationClient, recordAudit: audit });
       return send(res, result.status, result.error ? { error: result.error } : { ok: true, emailChanged: result.emailChanged, passwordChanged: result.passwordChanged });
+    }
+    if (resource === "telemetry" && req.method === "GET") {
+      res.setHeader("Cache-Control", "private, no-store");
+      return send(res, 200, await getFirebaseTelemetry());
     }
     if (resource === "dashboard" && req.method === "GET") {
       const now = Date.now();
