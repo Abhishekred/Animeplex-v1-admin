@@ -64,9 +64,34 @@ export async function getFirebaseTelemetry() {
         limit: 20,
       }),
     ]);
+    // Custom event-scoped dimensions source_id and outcome must be registered
+    // in GA4. Report failures never hide the active-user metrics.
+    let providers = [];
+    try {
+      const providerReport = await runReport(property, token, {
+        dateRanges: [{ startDate: "6daysAgo", endDate: "today" }],
+        dimensions: [{ name: "customEvent:source_id" }, { name: "customEvent:outcome" }],
+        metrics: [{ name: "eventCount" }],
+        dimensionFilter: { filter: { fieldName: "eventName", stringFilter: { value: "source_load" } } },
+        limit: 200,
+      });
+      const grouped = new Map();
+      for (const row of providerReport.rows || []) {
+        const id = row.dimensionValues?.[0]?.value;
+        if (!id || id === "(not set)") continue;
+        const outcome = row.dimensionValues?.[1]?.value;
+        const count = Number(row.metricValues?.[0]?.value || 0);
+        const entry = grouped.get(id) || { id, success: 0, failure: 0 };
+        if (outcome === "success") entry.success += count;
+        if (outcome === "failure") entry.failure += count;
+        grouped.set(id, entry);
+      }
+      providers = [...grouped.values()].sort((a, b) => b.failure - a.failure);
+    } catch { /* GA4 custom dimensions may not yet be registered. */ }
     return {
       configured: true, updatedAt: new Date().toISOString(),
       dau: metric(daily), wau: metric(weekly), mau: metric(monthly),
+      providers,
       sourceEvents: (source.rows || []).map(row => ({ outcome: row.dimensionValues?.[0]?.value || "unknown", count: Number(row.metricValues?.[0]?.value || 0) })),
       playbackEvents: (playback.rows || []).map(row => ({ event: row.dimensionValues?.[0]?.value || "unknown", count: Number(row.metricValues?.[0]?.value || 0) })),
     };
