@@ -15,17 +15,20 @@ export default async function handler(req,res) {
     const currentCode=Math.max(0,Number(req.query.current_version_code)||0);
     if(!deviceId)return send(res,400,{error:"device_id is required for staged rollout evaluation."});
     const supabase=serviceClient();
-    const {data:release,error}=await supabase.from("app_releases")
+    const {data:releases,error}=await supabase.from("app_releases")
       .select("id,version,version_code,platform,channel,mandatory,rollout_percent,release_notes,download_url,sha256,file_size,published_at")
       .eq("platform",platform).eq("channel",channel).eq("status","published")
-      .order("version_code",{ascending:false}).limit(1).maybeSingle();
+      .gt("version_code",currentCode)
+      .order("version_code",{ascending:false}).limit(100);
     if(error)throw error;
-    if(!release||Number(release.version_code)<=currentCode)return send(res,200,{update_available:false});
-    if(!release.download_url||!release.sha256||!/^[a-f0-9]{64}$/i.test(release.sha256)) {
-      return send(res,200,{update_available:false,reason:"release_integrity_metadata_incomplete"});
-    }
-    const bucket=parseInt(createHash("sha256").update(deviceId+"|"+release.id).digest("hex").slice(0,8),16)%100;
-    if(bucket>=release.rollout_percent)return send(res,200,{update_available:false,reason:"outside_rollout"});
+    // A staged latest release must not hide an older release the device is
+    // eligible for. Evaluate rollout independently for each version.
+    const release=(releases || []).find(candidate => {
+      if (!candidate.download_url || !/^[a-f0-9]{64}$/i.test(candidate.sha256 || "")) return false;
+      const bucket=parseInt(createHash("sha256").update(deviceId+"|"+candidate.id).digest("hex").slice(0,8),16)%100;
+      return bucket < Number(candidate.rollout_percent);
+    });
+    if(!release)return send(res,200,{update_available:false});
     const manifest = {
       version:release.version,
       version_code:Number(release.version_code),
