@@ -1,7 +1,7 @@
 import { sendTopicPush } from "../_lib/firebase_push.js";
 import { audit, fail, requireAdmin, send } from "../_lib/admin.js";
 import { validateSetting } from "../_lib/config.js";
-import { auditWindow, buildAuditTrend } from "../_lib/analytics.js";
+import { auditWindow, buildAuditTrend, buildSignupTrend } from "../_lib/analytics.js";
 import { updateOwnCredentials, verificationClient } from "../_lib/account.js";
 
 const roles = ["owner", "admin", "release_manager", "moderator", "auditor"];
@@ -23,7 +23,7 @@ export default async function handler(req, res) {
     }
     if (resource === "dashboard" && req.method === "GET") {
       const now = Date.now();
-      const [profiles, releases, announcements, backups, admins, recent, auditHistory, quickSettings] = await Promise.all([
+      const [profiles, releases, announcements, backups, admins, recent, auditHistory, quickSettings, recentSignups] = await Promise.all([
         supabase.from("profiles").select("id", { count: "exact", head: true }),
         supabase.from("app_releases").select("id,version,channel,status,created_at,rollout_percent").order("created_at", { ascending: false }).limit(5),
         supabase.from("app_announcements").select("id", { count: "exact", head: true }).eq("is_active", true),
@@ -32,14 +32,16 @@ export default async function handler(req, res) {
         supabase.from("admin_audit_logs").select("id,actor_email,action,target_type,target_id,created_at").order("created_at", { ascending: false }).limit(8),
         supabase.from("admin_audit_logs").select("created_at").gte("created_at", auditWindow(now).start).order("created_at", { ascending: false }).limit(1000),
         supabase.from("app_settings").select("key,value").in("key", ["maintenance_mode", "community_popup_enabled", "default_source"]),
+        supabase.from("profiles").select("created_at").gte("created_at", auditWindow(now).start).order("created_at", { ascending: false }).limit(1000),
       ]);
-      const errors = [profiles,releases,announcements,backups,admins,recent,auditHistory,quickSettings].filter(x => x.error);
+      const errors = [profiles,releases,announcements,backups,admins,recent,auditHistory,quickSettings,recentSignups].filter(x => x.error);
       if (errors.length) throw errors[0].error;
       return send(res, 200, {
         role,
         stats: { users: profiles.count || 0, activeAnnouncements: announcements.count || 0, backupAccounts: backups.count || 0, admins: admins.count || 0 },
         releases: releases.data || [], backups: backups.data || [], activity: recent.data || [],
         auditTrend: buildAuditTrend(auditHistory.data || [], now),
+        signupTrend: buildSignupTrend(recentSignups.data || [], now),
         settings: Object.fromEntries((quickSettings.data || []).map(row => [row.key, row.value])),
       });
     }
