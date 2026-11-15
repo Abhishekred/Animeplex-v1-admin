@@ -27,12 +27,31 @@ export function AuditChart({ trend, label = 'Admin actions' }) {
   </div>;
 }
 
-export function AnalyticsPage({ data, go, preview }) {
+export function AnalyticsPage({ data, go, preview, api }) {
+  const [telemetry, setTelemetry] = useState(null);
+  useEffect(() => {
+    if (preview) { setTelemetry({ configured: false, message: 'Firebase reports unavailable in preview.' }); return; }
+    let cancelled = false;
+    api('telemetry').then(value => { if (!cancelled) setTelemetry(value); })
+      .catch(() => { if (!cancelled) setTelemetry({ unavailable: true, message: 'Unable to load Firebase Analytics.' }); });
+    return () => { cancelled = true; };
+  }, [api, preview]);
   const total = data.auditTrend?.total ?? 0;
   return <div className="studio-stack">
     <div className="studio-feature-intro"><div className="studio-feature-icon"><Activity size={22}/></div><div><span className="studio-kicker">OPERATIONS ANALYTICS</span><h2>Know what’s happening.</h2><p>Live registry and admin activity {preview ? 'using clearly marked preview records' : 'from your secured admin API'}.</p></div></div>
     <div className="stats-grid analytics-stats"><div className="stat-card"><span>Admin actions · 7 days</span><strong>{total}</strong><small>{data.auditTrend?.truncated ? 'Latest 1,000 events' : 'Audit log records'}</small></div><div className="stat-card"><span>Profiles</span><strong>{data.stats.users.toLocaleString()}</strong><small>Stored profile records</small></div><div className="stat-card"><span>Announcements</span><strong>{data.stats.activeAnnouncements}</strong><small>Currently enabled</small></div><div className="stat-card"><span>New profiles · 7 days</span><strong>{data.signupTrend?.total ?? "—"}</strong><small>{data.signupTrend?.truncated ? "Latest 1,000 profiles" : "From registration timestamps"}</small></div></div>
-    <div className="studio-grid"><section className="panel"><div className="panel-heading"><div><h3>Admin activity</h3><p>Actions per day · last seven days, UTC</p></div><span className="preview-pill">{preview ? 'SAMPLE DATA' : 'API DATA'}</span></div><AuditChart trend={data.auditTrend}/><div className="chart-caption">{data.auditTrend?.truncated ? 'Showing the most recent 1,000 events in this period.' : 'Based on your admin audit log.'}</div></section><section className="panel telemetry-panel"><div className="panel-heading"><div><h3>New profiles</h3><p>Registrations per day · last seven days, UTC</p></div></div><AuditChart trend={data.signupTrend} label="New profiles"/><p>{data.signupTrend?.truncated ? "Counts are partial (latest 1,000 profiles)." : "Based on profile creation timestamps."} Firebase app-session, source-loading and playback events are collected separately; this dashboard does not yet expose Firebase reporting.</p><button type="button" className="text-link" onClick={()=>go('System Health')}>View system health <ChevronRight size={14}/></button></section></div>
+    <section className="panel telemetry-panel" aria-label="Firebase Analytics"><div className="panel-heading"><div><h3>Firebase active users</h3><p>Distinct active users from linked Google Analytics 4 property</p></div></div>
+      <div className="stats-grid analytics-stats">
+        {[[ "DAU · today", "dau" ], [ "WAU · 7 days", "wau" ], [ "MAU · 30 days", "mau" ]].map(([label, key]) =>
+          <div className="stat-card" key={key}><span>{label}</span><strong>{telemetry?.configured && !telemetry.unavailable ? Number(telemetry[key] ?? 0).toLocaleString() : "—"}</strong><small>GA4 active users</small></div>)}
+      </div>
+      <p>{telemetry?.message || (telemetry ? 'GA4 metrics may lag behind live playback. Source and playback counts cover the last seven days.' : 'Loading Firebase reports…')}</p>
+      {telemetry?.configured && !telemetry.unavailable && <div className="studio-grid">
+        <div><h3>Source health · 7 days</h3><p>Source-load events: {telemetry.sourceEvents?.reduce((sum, row) => sum + row.count, 0) ?? 0}. Per-source failures require registered GA4 custom dimensions; these totals are not a live provider-status probe.</p></div>
+        <div><h3>Playback · 7 days</h3>{telemetry.playbackEvents?.length ? telemetry.playbackEvents.map(row => <p key={row.event}>{row.event}: {row.count.toLocaleString()}</p>) : <p>No playback events reported yet.</p>}</div>
+      </div>}
+    </section>
+    <div className="studio-grid"><section className="panel"><div className="panel-heading"><div><h3>Admin activity</h3><p>Actions per day · last seven days, UTC</p></div><span className="preview-pill">{preview ? 'SAMPLE DATA' : 'API DATA'}</span></div><AuditChart trend={data.auditTrend}/><div className="chart-caption">{data.auditTrend?.truncated ? 'Showing the most recent 1,000 events in this period.' : 'Based on your admin audit log.'}</div></section><section className="panel telemetry-panel"><div className="panel-heading"><div><h3>New profiles</h3><p>Registrations per day · last seven days, UTC</p></div></div><AuditChart trend={data.signupTrend} label="New profiles"/><p>{data.signupTrend?.truncated ? "Counts are partial (latest 1,000 profiles)." : "Based on profile creation timestamps."} Firebase metrics are shown above when the GA4 property is configured.</p><button type="button" className="text-link" onClick={()=>go('System Health')}>View system health <ChevronRight size={14}/></button></section></div>
   </div>;
 }
 
