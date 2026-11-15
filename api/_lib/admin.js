@@ -77,5 +77,10 @@ export async function audit(ctx, action, targetType, targetId, details = {}) {
 }
 
 export function fail(res, error, status = 400) {
+  // Do not leak database schemas, SQL details or internal service errors to browsers.
+  if (status >= 500) {
+    console.error("[admin-api-error]", error);
+    return send(res, status, { error: "The service could not complete this request." });
+  }
   send(res, status, { error: error?.message || String(error) });
 }
