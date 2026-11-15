@@ -47,7 +47,13 @@ export function AnalyticsPage({ data, go, preview, api }) {
       </div>
       <p>{telemetry?.message || (telemetry ? 'GA4 metrics may lag behind live playback. Source and playback counts cover the last seven days.' : 'Loading Firebase reports…')}</p>
       {telemetry?.configured && !telemetry.unavailable && <div className="studio-grid">
-        <div><h3>Source health · 7 days</h3><p>Source-load events: {telemetry.sourceEvents?.reduce((sum, row) => sum + row.count, 0) ?? 0}. Per-source failures require registered GA4 custom dimensions; these totals are not a live provider-status probe.</p></div>
+        <div><h3>Source health · 7 days</h3>
+          <p>Source-load events: {telemetry.sourceEvents?.reduce((sum, row) => sum + row.count, 0) ?? 0}. Aggregated Firebase events, not live provider probes.</p>
+          {telemetry.providers?.length ? <div role="table" aria-label="Provider health over seven days">
+            <div role="row"><strong role="columnheader">Provider</strong> · <strong role="columnheader">Success</strong> / <strong role="columnheader">Failure</strong></div>
+            {telemetry.providers.map(provider => <p role="row" key={provider.id}><span role="cell">{provider.id}</span> · <span role="cell">{provider.success}</span> / <span role="cell">{provider.failure}</span> · {provider.success + provider.failure ? Math.round(100 * provider.failure / (provider.success + provider.failure)) : 0}% failure</p>)}
+          </div> : <p>Per-provider data unavailable until GA4 custom event dimensions source_id and outcome are registered and new events arrive.</p>}
+        </div>
         <div><h3>Playback · 7 days</h3>{telemetry.playbackEvents?.length ? telemetry.playbackEvents.map(row => <p key={row.event}>{row.event}: {row.count.toLocaleString()}</p>) : <p>No playback events reported yet.</p>}</div>
       </div>}
     </section>
