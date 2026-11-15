@@ -22,7 +22,7 @@ const NAV = [
   { label:"INFRASTRUCTURE", items:[["System Health",Activity],["Backups",Database],["Logs & Audit",FileClock]] },
   { label:"ADMINISTRATION", items:[["Admin Access",ShieldCheck],["Settings",SlidersHorizontal]] },
 ];
-const EMPTY = { stats:{users:0,activeAnnouncements:0,backupAccounts:0,admins:0}, releases:[], backups:[], activity:[], settings:{}, auditTrend:{days:[],total:0,truncated:false} };
+const EMPTY = { stats:{users:0,activeAnnouncements:0,backupAccounts:0,admins:0}, releases:[], backups:[], activity:[], settings:{}, auditTrend:{days:[],total:0,truncated:false}, signupTrend:{days:[],total:0,truncated:false} };
 const ROLES = ["owner","admin","release_manager","moderator","auditor"];
 const fmt = value => value ? new Date(value).toLocaleString() : "—";
 const shortId = value => value ? value.slice(0,8)+"…" : "—";
@@ -39,6 +39,7 @@ export default function App() {
   const sessionObserver = useRef(null);
   const navSearch = useRef(null);
   const dashboardRequest = useRef(0);
+  const dashboardPending = useRef(false);
   const moduleRequest = useRef(0);
   const currentSession = preview ? PREVIEW_SESSION : session;
   const [authLoading,setAuthLoading] = useState(true);
@@ -91,21 +92,24 @@ export default function App() {
   },[]);
 
   const refresh = useCallback(async()=>{
-    if (!currentSession) return;
+    if (!currentSession || dashboardPending.current) return;
+    dashboardPending.current = true;
     const request = ++dashboardRequest.current;
     setBusy(true);setError("");
     try {
       const result=await api("dashboard");
       if(request===dashboardRequest.current){setData({...EMPTY,...result,stats:{...EMPTY.stats,...result.stats}});setRole(result.role||"");setLastSync(new Date());}
     } catch(e) { if(request===dashboardRequest.current)setError(e.message); }
-    finally { if(request===dashboardRequest.current)setBusy(false); }
+    finally { dashboardPending.current = false; if(request===dashboardRequest.current)setBusy(false); }
   },[api,currentSession]);
   useEffect(()=>()=>{dashboardRequest.current++;moduleRequest.current++;},[currentSession]);
   useEffect(()=>{refresh();},[refresh]);
   useEffect(()=>{
     if (!currentSession || !autoRefresh || !["Overview","Analytics"].includes(active)) return;
-    const timer = window.setInterval(()=>{ if (document.visibilityState === 'visible') refresh(); },30000);
-    return ()=>window.clearInterval(timer);
+    const onVisible = () => { if (document.visibilityState === 'visible') refresh(); };
+    const timer = window.setInterval(onVisible,60000);
+    document.addEventListener('visibilitychange', onVisible);
+    return ()=>{ window.clearInterval(timer); document.removeEventListener('visibilitychange', onVisible); };
   },[currentSession,autoRefresh,active,refresh]);
   useEffect(()=>savePref('animeplex-admin-mode',dark?'dark':'light'),[dark]);
   useEffect(()=>savePref('animeplex-admin-accent',accent),[accent]);
