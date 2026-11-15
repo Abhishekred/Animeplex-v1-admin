@@ -10,7 +10,14 @@ export default async function handler(req,res) {
       .select("id,title,body,type,action_url,updated_at")
       .eq("is_active",true).order("created_at",{ascending:false}).limit(30);
     if(error) throw error;
-    return res.status(200).json({announcements:data||[]});
+    return res.status(200).json({ announcements: (data || []).map(row => ({
+      id: row.id,
+      title: row.title,
+      body: row.body,
+      type: row.type,
+      date: row.updated_at?.slice(0, 10) || null,
+      action: row.action_url ? { label: "Open", url: row.action_url } : null,
+    })) });
   } catch(error) {
     console.error("[public-announcements]",error);
     return send(res,503,{error:"Announcements temporarily unavailable."});
