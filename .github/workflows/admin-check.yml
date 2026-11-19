@@ -1,0 +1,26 @@
+name: Admin upload and release checks
+
+on:
+  push:
+    branches: [admin]
+  pull_request:
+    branches: [admin]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout admin only
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Install pinned dependencies without scripts
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Test release validation and multipart manifests
+        run: npm test
+      - name: Compile Vite admin
+        run: npm run build
