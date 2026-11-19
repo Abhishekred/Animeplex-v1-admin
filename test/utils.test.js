@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { compareVersions, isHttpsUrl, validateRelease, escapeHtml } from '../src/utils.js';
+import { compareVersions, isHttpsUrl, validateRelease, escapeHtml, validUploadParts, APK_CHUNK_BYTES } from '../src/utils.js';
 
 test('version ordering stable beats prerelease and compares numeric components', () => {
   assert.equal(compareVersions('2.3.10', '2.3.9'), 1);
@@ -38,4 +38,18 @@ test('rejects non-APK download links and size values typed in MB', () => {
 });
 test('dynamic text is escaped', () => {
   assert.equal(escapeHtml('<script>'), '&lt;script&gt;');
+});
+
+test('multipart APK upload is valid with ordered, safe, correctly sized chunks', () => {
+  const id='12345678-1234-1234-1234-123456789abc';
+  const parts=[{path:`releases/${id}/${id}/part-001.bin`,size:APK_CHUNK_BYTES},
+   {path:`releases/${id}/${id}/part-002.bin`,size:50331648-APK_CHUNK_BYTES}];
+  assert.equal(validUploadParts(parts,50331648),true);
+  assert.equal(validUploadParts(parts,12),false);
+  assert.equal(validUploadParts([{path:'../credentials',size:123}],123),false);
+  const result=validateRelease({version:'2.4.0',channel:'stable',
+     delivery_method:'upload',apk_size:50331648,apk_parts:parts});
+  assert.equal(result.data.delivery_method,'upload');
+  assert.equal(result.data.apk_url,null);
+  assert.equal(result.data.apk_parts.length,2);
 });

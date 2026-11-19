@@ -663,3 +663,24 @@ body::after {
     background-color:#1b2546;
   }
 }
+
+/* APK source: premium segmented glass picker and file drop area */
+.apk-method-switch{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.apk-method-option{position:relative;min-width:0;cursor:pointer}
+.apk-method-option input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}
+.apk-method-option span{display:flex;justify-content:center;align-items:center;gap:10px;min-height:56px;padding:12px;border-radius:14px;background:rgba(130,153,209,.11);border:1px solid rgba(195,209,255,.19);font-size:12px;font-weight:750;color:#c5d1ec;transition:background .18s,border-color .18s,box-shadow .18s}
+.apk-method-option:hover span{background:rgba(172,149,236,.17)}
+.apk-method-option input:checked + span{background:linear-gradient(118deg,rgba(174,122,255,.34),rgba(104,182,233,.18));border-color:rgba(207,175,255,.61);box-shadow:inset 0 1px rgba(255,255,255,.18),0 8px 23px rgba(12,12,39,.17);color:#fff}
+.apk-method-option input:focus-visible + span{outline:2px solid #bda5ff;outline-offset:3px}
+.apk-source-section{min-width:0}
+.apk-source-section[hidden]{display:none!important}
+.apk-dropzone{position:relative;display:flex;gap:17px;align-items:center;min-height:122px;padding:24px;border:1.5px dashed rgba(195,177,248,.46);border-radius:17px;background:linear-gradient(125deg,rgba(151,114,236,.12),rgba(96,188,233,.07));box-shadow:inset 0 1px rgba(255,255,255,.08);color:#d5b7ff}
+.apk-dropzone strong{font-size:13px;color:#f6eeff}
+.apk-dropzone p{margin:7px 0 0;font-size:11px;line-height:1.6;color:#a9b8d9}
+.apk-file-input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}
+.apk-file-input:disabled{cursor:not-allowed}
+.apk-dropzone:focus-within{outline:2px solid #bda5ff;outline-offset:3px}
+.apk-dropzone:hover{border-color:rgba(227,199,255,.71);background:rgba(170,129,241,.16)}
+.upload-status{margin-top:10px;font-size:12px;font-weight:750;color:#a9e9f5;min-height:18px}
+@media(max-width:450px){.apk-method-switch{gap:8px}.apk-method-option span{font-size:11px;gap:6px;padding:10px 7px}.apk-dropzone{padding:17px;gap:12px;min-height:118px}.apk-dropzone strong{font-size:12px}}
+@media(prefers-reduced-motion:reduce){.apk-method-option span{transition:none}}

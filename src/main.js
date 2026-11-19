@@ -2,7 +2,7 @@
 import './style.css';
 import './glass.css';
 import { createClient } from '@supabase/supabase-js';
-import { escapeHtml as esc, isHttpsUrl, validateRelease, shortDate, compareVersions } from './utils.js';
+import { escapeHtml as esc, isHttpsUrl, validateRelease, shortDate, compareVersions, validUploadParts, APK_CHUNK_BYTES, APK_MAX_BYTES, APK_BUCKET } from './utils.js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -14,7 +14,7 @@ const supabase = supabaseUrl && supabaseKey
 const root = document.getElementById('app');
 const initialRelease = () => ({
   version: '', channel: 'stable', title: '', release_notes: '',
-  apk_url: '', apk_size: 0, mandatory: false, status: 'draft',
+  delivery_method: 'upload', apk_url: '', apk_parts: [], apk_size: 0, mandatory: false, status: 'draft',
 });
 const state = {
   user: null, member: null, config: null, releases: [], page: 'overview',
@@ -202,7 +202,7 @@ function releaseList() {
     <button type="button" class="release-list-item ${state.selectedId === r.id ? 'is-selected' : ''}" data-action="select-release" data-id="${esc(r.id)}">
       <div class="release-icon">${icon('package',18)}</div>
       <div class="release-meta"><h3>v${esc(r.version)} ${r.channel === 'beta' ? '<span class="pill beta">beta</span>' : ''}</h3>
-        <p>${esc(r.title || 'AnimePlex Android')} · ${shortDate(r.published_at || r.created_at)}</p>
+        <p>${esc(r.title || 'AnimePlex Android')} · ${r.delivery_method === 'upload' ? 'Uploaded APK' : 'Direct link'} · ${shortDate(r.published_at || r.created_at)}</p>
         <div style="margin-top:8px">${pill(r.status)}</div>
       </div><div class="arrow">${icon('arrow',17)}</div>
     </button>`).join('')}</div>`;
@@ -236,9 +236,33 @@ function editor() {
         <div class="hint">Only beta-enabled users receive beta releases.</div>
       </div>
       ${field('Release title','title',row.title,'Performance improvements',{disabled:locked,wide:true})}
-      ${field('Signed APK direct download URL *','apk_url',row.apk_url,'https://github.com/.../releases/download/v2.3.7/AnimePlex.apk',
-        {disabled:locked,wide:true,required:true,hint:'Use a DIRECT HTTPS URL ending in .apk to your SIGNED file. APKPure/store pages and unsigned GitHub Actions artifacts cannot install.'})}
-      ${field('APK size (bytes)','apk_size',row.apk_size || 0,'0',{type:'number',disabled:locked,hint:'Enter the exact file size in bytes, not MB. Set 0 if unknown.'})}
+      <div class="form-wide">
+        <span class="label">Choose APK source</span>
+        <div class="apk-method-switch" role="group" aria-label="APK source">
+          <label class="apk-method-option"><input type="radio" name="delivery_method" value="upload" ${(row.delivery_method ?? 'link') === 'upload' ? 'checked' : ''} ${locked ? 'disabled' : ''}><span>${icon('upload',18)} Upload APK</span></label>
+          <label class="apk-method-option"><input type="radio" name="delivery_method" value="link" ${(row.delivery_method ?? 'link') === 'link' ? 'checked' : ''} ${locked ? 'disabled' : ''}><span>${icon('out',18)} Paste APK link</span></label>
+        </div>
+      </div>
+      <div class="form-wide apk-source-section" data-apk-source="upload" ${(row.delivery_method ?? 'link') === 'upload' ? '' : 'hidden'}>
+        <label class="label" for="release-apk-file">Signed AnimePlex APK file</label>
+        <div class="apk-dropzone">
+          ${icon('upload',25)}
+          <div><strong>Select .apk from your device</strong><p>Phone or PC · Secure Supabase Storage · 32 MB upload parts for large files</p></div>
+          <input id="release-apk-file" class="apk-file-input" type="file" accept=".apk,application/vnd.android.package-archive" ${locked ? 'disabled' : ''}>
+        </div>
+        ${row.delivery_method === 'upload' && validUploadParts(row.apk_parts,Number(row.apk_size)) ?
+          `<div class="alert success" style="margin-top:12px">${icon('check',16)} APK uploaded · ${Math.round(row.apk_size/1048576)} MB · ${row.apk_parts.length} stored parts</div>` : ''}
+        <div id="upload-status" class="upload-status" aria-live="polite" role="status"></div>
+        <div class="hint">First Save Draft uploads the signed APK and stores the download parts. Publish separately. Maximum 800 MB. No GitHub upload needed.</div>
+      </div>
+      <div class="form-wide apk-source-section" data-apk-source="link" ${(row.delivery_method ?? 'link') === 'link' ? '' : 'hidden'}>
+        ${field('Direct signed APK download URL *','apk_url',row.apk_url,
+          'https://your-storage.example.com/AnimePlex-v2.3.8.apk',
+          {disabled:locked,required:(row.delivery_method ?? 'link') === 'link',
+           hint:'Any public HTTPS link ending in .apk. Paste the file URL, not an APKPure page or ZIP.'})}
+        <div style="margin-top:17px">${field('APK size in bytes','apk_size',row.delivery_method === 'upload' ? 0 : row.apk_size || 0,'0',
+          {type:'number',disabled:locked,hint:'Optional for link mode. Enter exact bytes, or 0 when unknown.'})}</div>
+      </div>
       <div><div class="label">Required update</div>
         <div class="toggle-line" style="padding:11px 0;border:0"><div><div class="toggle-text">Mark as mandatory</div>
         <div class="toggle-help">App will not offer “Skip version” for this release.</div></div>
@@ -385,27 +409,102 @@ async function saveSettings(values,success) {
     toast(success);
   });
 }
+/** Upload without proxying the APK through Vercel's small request-body limit.
+ *  Each part stays under the Supabase Free plan's per-file limit. */
+async function uploadApkChunks(file) {
+  if (!file || !file.name.toLowerCase().endsWith('.apk')) {
+    throw new Error('Select a .apk file from your device.');
+  }
+  if (file.size < 1000000 || file.size > APK_MAX_BYTES) {
+    throw new Error('Select an APK between 1 MB and 800 MB.');
+  }
+  const bytes = new Uint8Array(await file.slice(0,4).arrayBuffer());
+  if (bytes.length !== 4 || bytes[0] !== 0x50 || bytes[1] !== 0x4b ||
+      bytes[2] !== 0x03 || bytes[3] !== 0x04) {
+    throw new Error('This file does not have a valid APK/ZIP header.');
+  }
+  const folder = `releases/${state.user.id}/${crypto.randomUUID()}`;
+  const parts = [], paths = [];
+  const count = Math.ceil(file.size / APK_CHUNK_BYTES);
+  const status = document.getElementById('upload-status');
+  const setStatus = (message) => {if(status)status.textContent=message;};
+  try {
+    for (let i = 0; i < count; i++) {
+      const begin = i * APK_CHUNK_BYTES;
+      const chunk = file.slice(begin, Math.min(begin+APK_CHUNK_BYTES,file.size));
+      const path = `${folder}/part-${String(i+1).padStart(3,'0')}.bin`;
+      setStatus(`Uploading part ${i+1} of ${count} · ${Math.round(begin/file.size*100)}% completed`);
+      const {error} = await supabase.storage.from(APK_BUCKET).upload(path,chunk,{
+        contentType:'application/octet-stream',cacheControl:'31536000',upsert:false,
+      });
+      if(error) throw error;
+      paths.push(path);
+      parts.push({path,size:chunk.size});
+      setStatus(`Uploaded ${i+1}/${count} parts · ${Math.round((begin+chunk.size)/file.size*100)}%`);
+    }
+    return parts;
+  } catch(error) {
+    if(paths.length) await supabase.storage.from(APK_BUCKET).remove(paths);
+    throw error;
+  }
+}
 async function saveDraft(form) {
   if (state.busy) return;
   const chosen = selectedRelease();
-  if (chosen?.status === 'published') {toast('Pause the release before editing it.',true);return;}
-  const f=new FormData(form);
-  const input={
+  if (chosen?.status === 'published') {
+    toast('Pause the release before editing it.',true);return;
+  }
+  const f = new FormData(form);
+  const method = f.get('delivery_method') || chosen?.delivery_method || 'link';
+  const file = form.querySelector('#release-apk-file')?.files?.[0] || null;
+  const input = {
     version:f.get('version'),channel:f.get('channel'),title:f.get('title'),
     release_notes:f.get('release_notes'),apk_url:f.get('apk_url'),
     apk_size:f.get('apk_size'),mandatory:f.get('mandatory')==='on',
+    delivery_method:method,apk_parts:[],
   };
-  const checked=validateRelease(input);
-  if(checked.error){toast(checked.error,true);return;}
+  if (method === 'upload' && !file && chosen?.delivery_method === 'upload') {
+    input.apk_parts=chosen.apk_parts;
+    input.apk_size=chosen.apk_size;
+  }
+  if (method === 'upload' && file) {
+    // Validate version and other fields before uploading large APK bytes.
+    const version=String(input.version??'').trim();
+    if(!/^v?\\d+(\\.\\d+){1,3}(-[a-zA-Z0-9.-]+)?$/.test(version)) {
+      toast('Enter a valid version before uploading.',true);return;
+    }
+  } else {
+    const checked=validateRelease(input);
+    if(checked.error){toast(checked.error,true);return;}
+  }
   await mutate(async()=>{
-    const request=chosen
-      ? supabase.from('animeplex_update_releases').update({...checked.data,updated_at:new Date().toISOString()}).eq('id',chosen.id)
-      : supabase.from('animeplex_update_releases').insert({...checked.data,status:'draft',created_by:state.user.id});
-    const {data,error}=await request.select('id').single();
-    if(error) throw error;
-    state.selectedId=data.id;
-    state.draft=null;
-    toast(chosen?'Changes saved (not republished).':'Draft saved. Not sent to users.');
+    let uploadedParts=[];
+    try {
+      if(method === 'upload' && file) {
+        uploadedParts=await uploadApkChunks(file);
+        input.apk_parts=uploadedParts;
+        input.apk_size=file.size;
+        input.apk_url=null;
+      }
+      const checked=validateRelease(input);
+      if(checked.error)throw new Error(checked.error);
+      const request=chosen
+        ? supabase.from('animeplex_update_releases')
+          .update({...checked.data,updated_at:new Date().toISOString()}).eq('id',chosen.id)
+        : supabase.from('animeplex_update_releases')
+          .insert({...checked.data,status:'draft',created_by:state.user.id});
+      const {data,error}=await request.select('id').single();
+      if(error)throw error;
+      state.selectedId=data.id;
+      state.draft=null;
+      toast(method==='upload'?'APK uploaded, release draft saved. Publish when ready.':
+        chosen?'Changes saved (not republished).':'Draft saved. Not sent to users.');
+    } catch(error) {
+      if(uploadedParts.length) {
+        await supabase.storage.from(APK_BUCKET).remove(uploadedParts.map(p=>p.path));
+      }
+      throw error;
+    }
   });
 }
 function selectRelease(id) {
@@ -474,6 +573,23 @@ document.addEventListener('submit',async(e)=>{
   }
 });
 document.addEventListener('change',async(e)=>{
+  if (e.target?.name === 'delivery_method') {
+    const method=e.target.value;
+    document.querySelectorAll('[data-apk-source]').forEach(section=>{
+      section.hidden=section.dataset.apkSource !== method;
+    });
+    const input=document.querySelector('#release-apk_url');
+    if(input)input.required=method==='link';
+    return;
+  }
+  if (e.target?.id === 'release-apk-file') {
+    const file=e.target.files?.[0];
+    const status=document.getElementById('upload-status');
+    if(status)status.textContent=file
+      ? `${file.name} · ${(file.size/1048576).toFixed(1)} MB selected. Press Save draft to upload.`
+      : '';
+    return;
+  }
   const key=e.target?.dataset?.setting;
   if(!key||!['enabled','auto_check','beta_enabled'].includes(key))return;
   const value=e.target.checked;

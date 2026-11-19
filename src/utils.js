@@ -29,26 +29,68 @@ export function compareVersions(a, b) {
   return String(x.pre ?? '').localeCompare(String(y.pre ?? ''), undefined, { numeric: true });
 }
 
+export const APK_CHUNK_BYTES = 32 * 1024 * 1024;
+export const APK_MAX_BYTES = 800 * 1024 * 1024;
+export const APK_BUCKET = 'animeplex-releases';
+
+/** Upload manifest is public metadata. Require exact part sizes and safe paths. */
+export function validUploadParts(parts, expectedSize) {
+  if (!Array.isArray(parts) || parts.length < 1 || parts.length > 100 ||
+      !Number.isSafeInteger(expectedSize) || expectedSize < 1000000 ||
+      expectedSize > APK_MAX_BYTES) return false;
+  let total = 0;
+  const seen = new Set();
+  for (const part of parts) {
+    const path = part?.path, size = part?.size;
+    if (typeof path !== 'string' ||
+        !/^releases\/[0-9a-f-]{36}\/[0-9a-f-]{36}\/part-\d{3}\.bin$/.test(path) ||
+        !Number.isSafeInteger(size) || size < 1 || size > APK_CHUNK_BYTES ||
+        seen.has(path)) return false;
+    seen.add(path);
+    total += size;
+  }
+  return total === expectedSize;
+}
+
 export function validateRelease(row) {
   const version = String(row.version ?? '').trim().replace(/^v/i, '');
   if (!/^\d+(\.\d+){1,3}(-[a-zA-Z0-9.-]+)?$/.test(version)) {
     return { error: 'Use a version like 2.3.7 or 2.3.7-beta1.' };
   }
-  if (!isHttpsUrl(row.apk_url)) {
-    return { error: 'Use a public HTTPS direct-download URL for a SIGNED APK.' };
-  }
-  // Store pages and redirects (such as APKPure package pages) are not APK
-  // assets; the in-app installer needs the actual signed .apk download.
-  if (!new URL(String(row.apk_url).trim()).pathname.toLowerCase().endsWith('.apk')) {
-    return { error: 'The APK URL must lead directly to a signed .apk file (not a store page or redirect).' };
-  }
   if (String(row.release_notes ?? '').length > 20000) return { error: 'Release notes are too long.' };
   if (String(row.title ?? '').length > 180) return { error: 'Title is too long.' };
-  const size = Number(row.apk_size ?? 0);
-  if (!Number.isSafeInteger(size) || size < 0) return { error: 'APK size must be a non-negative number of bytes.' };
-  if (size > 0 && size < 1000000) return { error: 'APK size is in BYTES, not MB. Enter the true size (at least 1,000,000 bytes), or 0 to skip verification.' };
   if (!['stable', 'beta'].includes(row.channel)) return { error: 'Choose stable or beta.' };
-  return { data: { version, title: String(row.title ?? '').trim(), release_notes: String(row.release_notes ?? '').trim(), apk_url: String(row.apk_url).trim(), apk_size: size, channel: row.channel, mandatory: Boolean(row.mandatory) } };
+  const size = Number(row.apk_size ?? 0);
+  if (!Number.isSafeInteger(size) || size < 0) {
+    return { error: 'APK size must be a non-negative number of bytes.' };
+  }
+  const method = row.delivery_method ?? 'link';
+  if (!['link', 'upload'].includes(method)) return { error: 'Choose an APK source.' };
+  let apkUrl = null, parts = [];
+  if (method === 'upload') {
+    parts = row.apk_parts ?? [];
+    if (!validUploadParts(parts, size)) {
+      return { error: 'Select and upload a complete signed APK before saving this release.' };
+    }
+  } else {
+    if (!isHttpsUrl(row.apk_url)) {
+      return { error: 'Use a public HTTPS direct-download URL for a SIGNED APK.' };
+    }
+    // A store page or dynamic redirect is not an installable .apk asset.
+    if (!new URL(String(row.apk_url).trim()).pathname.toLowerCase().endsWith('.apk')) {
+      return { error: 'The APK URL must lead directly to a signed .apk file (not a store page or redirect).' };
+    }
+    if (size > 0 && size < 1000000) {
+      return { error: 'APK size is in BYTES, not MB. Enter the exact file size (at least 1,000,000 bytes), or 0.' };
+    }
+    apkUrl = String(row.apk_url).trim();
+  }
+  return { data: {
+    version, title: String(row.title ?? '').trim(),
+    release_notes: String(row.release_notes ?? '').trim(),
+    apk_url: apkUrl, apk_parts: parts, delivery_method: method,
+    apk_size: size, channel: row.channel, mandatory: Boolean(row.mandatory),
+  } };
 }
 
 export const shortDate = (value) => value
