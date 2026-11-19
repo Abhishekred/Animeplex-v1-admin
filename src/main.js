@@ -419,12 +419,13 @@ function controlsPage() {
           <span class="pill ${c.player_controls_enabled?'published':'paused'}">${c.player_controls_enabled?'Published':'Not active'}</span></div>
           <div class="card-body stack">
             ${controlPreview()}
-            <div class="manager-note">Back, Lock and Settings are fixed safety controls. Top bar holds a maximum of 5 movable controls. Hidden controls remain reachable through More.</div>
+            <div class="manager-note">Back, Lock and Settings are fixed safety controls. Top bar holds a maximum of 5 movable controls. Hidden controls remain reachable through More. Engine-specific actions only appear when supported by the selected player.</div>
             ${switchSetting('allow_player_customization','Let users customize controls','ON preserves each viewer’s personal layout. OFF enforces this admin layout for everyone.',state.playerAllowCustom)}
             ${state.playerDirty?'<div class="alert warning">Unpublished changes. Users still see the last published layout.</div>':''}
             <div class="manager-actions">
               <button class="btn btn-primary" data-action="publish-player-controls">${icon('save',16)} Publish player controls</button>
-              <button class="btn btn-ghost" data-action="reset-player-draft">${icon('refresh',15)} Reset editor</button>
+              <button class="btn btn-ghost" data-action="reset-player-draft">${icon('refresh',15)} Undo edits</button>
+              <button class="btn btn-ghost" data-action="restore-player-defaults">Restore app defaults</button>
               ${c.player_controls_enabled?'<button class="btn btn-ghost" data-action="disable-player-controls">Disable admin override</button>':''}
             </div>
           </div>
@@ -795,6 +796,9 @@ document.addEventListener('click',async(e)=>{
   if(action==='control-up'||action==='control-down'){
     updateControlDraft(reorderPlayerControl(playerDraft(),btn.dataset.id,action==='control-up'?-1:1));
     return;
+  }
+  if(action==='restore-player-defaults'){
+    updateControlDraft(cleanPlayerLayout(DEFAULT_PLAYER_LAYOUT));return;
   }
   if(action==='reset-player-draft'){
     state.playerDraft=cleanPlayerLayout(config().player_controls ?? DEFAULT_PLAYER_LAYOUT);
