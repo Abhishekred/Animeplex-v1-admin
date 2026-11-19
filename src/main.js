@@ -257,9 +257,9 @@ function editor() {
       </div>
       <div class="form-wide apk-source-section" data-apk-source="link" ${(row.delivery_method ?? 'link') === 'link' ? '' : 'hidden'}>
         ${field('Direct signed APK download URL *','apk_url',row.apk_url,
-          'https://your-storage.example.com/AnimePlex-v2.3.8.apk',
+          'https://files.example.com/download?id=AnimePlex-v2.3.8',
           {disabled:locked,required:(row.delivery_method ?? 'link') === 'link',
-           hint:'Any public HTTPS link ending in .apk. Paste the file URL, not an APKPure page or ZIP.'})}
+           hint:'HTTPS download links and redirects supported (even without .apk in URL). The link must return the actual signed AnimePlex APK without login or browser cookies.'})}
         <div style="margin-top:17px">${field('APK size in bytes','apk_size',row.delivery_method === 'upload' ? 0 : row.apk_size || 0,'0',
           {type:'number',disabled:locked,hint:'Optional for link mode. Enter exact bytes, or 0 when unknown.'})}</div>
       </div>

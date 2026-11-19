@@ -76,10 +76,9 @@ export function validateRelease(row) {
     if (!isHttpsUrl(row.apk_url)) {
       return { error: 'Use a public HTTPS direct-download URL for a SIGNED APK.' };
     }
-    // A store page or dynamic redirect is not an installable .apk asset.
-    if (!new URL(String(row.apk_url).trim()).pathname.toLowerCase().endsWith('.apk')) {
-      return { error: 'The APK URL must lead directly to a signed .apk file (not a store page or redirect).' };
-    }
+    // The URL path need not end in .apk: legitimate file hosts and CDNs
+    // use /download?id=... or redirects. The app verifies the downloaded
+    // content before passing it to Android's package installer.
     if (size > 0 && size < 1000000) {
       return { error: 'APK size is in BYTES, not MB. Enter the exact file size (at least 1,000,000 bytes), or 0.' };
     }
