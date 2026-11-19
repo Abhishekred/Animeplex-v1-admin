@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { compareVersions, isHttpsUrl, validateRelease, escapeHtml, validUploadParts, APK_CHUNK_BYTES } from '../src/utils.js';
+import { compareVersions, isHttpsUrl, validateRelease, escapeHtml, validUploadParts, APK_CHUNK_BYTES, linkMbToBytes, linkBytesToMb } from '../src/utils.js';
 
 test('version ordering stable beats prerelease and compares numeric components', () => {
   assert.equal(compareVersions('2.3.10', '2.3.9'), 1);
@@ -57,6 +57,22 @@ test('link mode still rejects insecure URLs and sizes entered in MB', () => {
     apk_url:'https://example.com/AnimePlex.apk',
     apk_size:120000000,
   }).data);
+});
+test('link APK size converts MB input to bytes for the existing API', () => {
+  assert.equal(linkMbToBytes('24'), 24000000);
+  assert.equal(linkMbToBytes('24.5'), 24500000);
+  assert.equal(linkMbToBytes('0'), 0);
+  assert.equal(linkMbToBytes(''), 0);
+  assert.equal(linkBytesToMb(24500000), '24.5');
+  assert.equal(linkBytesToMb(24000000), '24');
+  assert.equal(linkBytesToMb(0), '0');
+  assert.ok(Number.isNaN(linkMbToBytes('-2')));
+  assert.ok(Number.isNaN(linkMbToBytes('oops')));
+  const data = validateRelease({
+    version:'2.4.0', channel:'stable', delivery_method:'link',
+    apk_url:'https://example.com/download?id=10', apk_size:linkMbToBytes('24.5')
+  }).data;
+  assert.equal(data.apk_size, 24500000);
 });
 test('dynamic text is escaped', () => {
   assert.equal(escapeHtml('<script>'), '&lt;script&gt;');

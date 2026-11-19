@@ -2,7 +2,7 @@
 import './style.css';
 import './glass.css';
 import { createClient } from '@supabase/supabase-js';
-import { escapeHtml as esc, isHttpsUrl, validateRelease, shortDate, compareVersions, validUploadParts, APK_CHUNK_BYTES, APK_MAX_BYTES, APK_BUCKET } from './utils.js';
+import { escapeHtml as esc, isHttpsUrl, validateRelease, shortDate, compareVersions, validUploadParts, APK_CHUNK_BYTES, APK_MAX_BYTES, APK_BUCKET, linkMbToBytes, linkBytesToMb } from './utils.js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -210,7 +210,7 @@ function releaseList() {
 function field(label, name, value, placeholder='', opts={}) {
   return `<div class="${opts.wide ? 'form-wide' : ''}"><label for="release-${name}" class="label">${esc(label)}</label>
     ${opts.area ? `<textarea id="release-${name}" class="field-area" name="${name}" placeholder="${esc(placeholder)}" ${opts.disabled ? 'disabled' : ''}>${esc(value ?? '')}</textarea>` :
-    `<input id="release-${name}" class="field" type="${opts.type || 'text'}" name="${name}" value="${esc(value ?? '')}" placeholder="${esc(placeholder)}" ${opts.disabled ? 'disabled' : ''} ${opts.required ? 'required' : ''} ${opts.type === 'number' ? 'min="0" step="1"' : ''}>`}
+    `<input id="release-${name}" class="field" type="${opts.type || 'text'}" name="${name}" value="${esc(value ?? '')}" placeholder="${esc(placeholder)}" ${opts.disabled ? 'disabled' : ''} ${opts.required ? 'required' : ''} ${opts.type === 'number' ? 'min="0" step="' + (opts.step ?? '1') + '"' : ''}>`}
     ${opts.hint ? `<div class="hint">${esc(opts.hint)}</div>` : ''}
   </div>`;
 }
@@ -260,8 +260,8 @@ function editor() {
           'https://files.example.com/download?id=AnimePlex-v2.3.8',
           {disabled:locked,required:(row.delivery_method ?? 'link') === 'link',
            hint:'HTTPS download links and redirects supported (even without .apk in URL). The link must return the actual signed AnimePlex APK without login or browser cookies.'})}
-        <div style="margin-top:17px">${field('APK size in bytes','apk_size',row.delivery_method === 'upload' ? 0 : row.apk_size || 0,'0',
-          {type:'number',disabled:locked,hint:'Optional for link mode. Enter exact bytes, or 0 when unknown.'})}</div>
+        <div style="margin-top:17px">${field('APK size (MB)','apk_size_mb',linkBytesToMb(row.delivery_method === 'upload' ? 0 : row.apk_size || 0),'0',
+          {type:'number',step:'0.01',disabled:locked,hint:'Enter size in MB (e.g. 24 or 24.5). Optional: 0 if unknown. Uploaded APK sizes are automatic.'})}</div>
       </div>
       <div><div class="label">Required update</div>
         <div class="toggle-line" style="padding:11px 0;border:0"><div><div class="toggle-text">Mark as mandatory</div>
@@ -460,7 +460,8 @@ async function saveDraft(form) {
   const input = {
     version:f.get('version'),channel:f.get('channel'),title:f.get('title'),
     release_notes:f.get('release_notes'),apk_url:f.get('apk_url'),
-    apk_size:f.get('apk_size'),mandatory:f.get('mandatory')==='on',
+    apk_size:method==='link' ? linkMbToBytes(f.get('apk_size_mb')) : 0,
+    mandatory:f.get('mandatory')==='on',
     delivery_method:method,apk_parts:[],
   };
   if (method === 'upload' && !file && chosen?.delivery_method === 'upload') {

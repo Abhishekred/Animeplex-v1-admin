@@ -6,7 +6,7 @@ Fresh Vite admin workspace on the `admin` branch. No code or files were reused f
 
 - Draft, edit, publish, pause and delete (draft-only) Android releases.
 - Stable and beta channels, optional required-update flag.
-- Version, release notes, signed APK HTTPS URL and size verification.
+- Version, release notes, signed APK HTTPS URL and size verification. Paste-link APK size is entered in **MB** (0 if unknown) and converted to bytes for the existing API; uploaded APKs retain the exact byte size.
 - Global update enable switch, automatic check switch, beta channel switch and GitHub repository URL.
 - App releases remain **invisible until explicitly published**.
 - RLS authorizes only active `owner`, `admin` or `release_manager` rows in `public.admin_members` to make changes. Signed-out users can only read *published* metadata.

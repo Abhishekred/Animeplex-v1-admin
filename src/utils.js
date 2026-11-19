@@ -33,6 +33,22 @@ export const APK_CHUNK_BYTES = 32 * 1024 * 1024;
 export const APK_MAX_BYTES = 800 * 1024 * 1024;
 export const APK_BUCKET = 'animeplex-releases';
 
+// Link-mode size is entered in decimal MB; Postgres and Android use bytes.
+// Uploaded APKs keep their exact file sizes and bypass these helpers.
+export const LINK_MB_BYTES = 1000000;
+export function linkMbToBytes(value) {
+  if (value === '' || value == null) return 0;
+  const mb = Number(value);
+  if (!Number.isFinite(mb) || mb < 0 || mb > 10000) return NaN;
+  return Math.round(mb * LINK_MB_BYTES);
+}
+export function linkBytesToMb(value) {
+  const bytes = Number(value) || 0;
+  if (bytes <= 0) return '0';
+  return String(Number((bytes / LINK_MB_BYTES).toFixed(2)));
+}
+
+
 /** Upload manifest is public metadata. Require exact part sizes and safe paths. */
 export function validUploadParts(parts, expectedSize) {
   if (!Array.isArray(parts) || parts.length < 1 || parts.length > 100 ||
