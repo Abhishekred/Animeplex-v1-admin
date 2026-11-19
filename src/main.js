@@ -1,5 +1,6 @@
 
 import './style.css';
+import './glass.css';
 import { createClient } from '@supabase/supabase-js';
 import { escapeHtml as esc, isHttpsUrl, validateRelease, shortDate, compareVersions } from './utils.js';
 
