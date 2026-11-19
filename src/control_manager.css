@@ -1,0 +1,37 @@
+
+/* Admin device control preview + compact arrangement editor */
+.manager-grid{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(300px,0.85fr);gap:22px;align-items:start}
+.control-stage{position:relative;aspect-ratio:16/9;border-radius:18px;overflow:hidden;
+ background:linear-gradient(125deg,#1c2642 0%,#33253f 45%,#151e32 100%);
+ box-shadow:inset 0 0 0 1px #ffffff20,0 25px 40px #00000018;color:#fff}
+.control-stage:before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 58% 49%,#7274bd1e,transparent 65%);pointer-events:none}
+.control-top{position:absolute;top:17px;left:17px;right:17px;display:flex;gap:10px;align-items:center}
+.control-stage-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:600;flex:1}
+.control-rail{position:absolute;bottom:18px;display:flex;gap:2px;padding:6px;border-radius:28px;background:#080c18c7}
+.control-rail.left{left:16px}.control-rail.right{right:16px}
+.control-stage-button{flex-shrink:0;display:flex;align-items:center;justify-content:center;
+ width:27px;height:30px;border:0;background:transparent;color:#fff}
+.control-stage-button.fixed{color:#d7ddeb}
+.control-stage-button svg{max-width:19px;max-height:19px}
+.control-empty{color:#b3bacb;font-size:11px}
+.control-lanes{display:grid;gap:16px}
+.control-lane{min-height:100px;border:1px solid var(--border,#303648);border-radius:15px;padding:12px;background:#808ca30b}
+.control-lane h3{font-size:12px;margin:0 0 10px;color:var(--text,#f5f5f7)}
+.control-lane.is-drop{outline:2px dashed #8c8bff;outline-offset:-4px}
+.control-row{display:grid;grid-template-columns:18px minmax(0,1fr) auto auto auto;gap:9px;
+ padding:9px 4px;align-items:center;border-top:1px solid #8888881c;font-size:12px}
+.control-row[draggable=true]{cursor:grab}
+.control-row-label{display:flex;gap:8px;align-items:center;min-width:0;font-size:12px}
+.control-row-label span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.control-mini{min-width:26px;height:28px;border-radius:8px;border:1px solid #88888833;background:#77777717;color:inherit;cursor:pointer}
+.control-mini:disabled{opacity:.3;cursor:default}
+.control-select{width:91px;max-width:100%;font-size:11px;padding:7px 4px;
+ background:var(--surface,#171a24);color:inherit;border:1px solid #7777773c;border-radius:8px}
+.region-select{width:100%;font-size:14px}
+.manager-note{font-size:12px;color:var(--muted,#9aa2b4);line-height:1.7}
+.manager-actions{display:flex;gap:10px;flex-wrap:wrap}
+@media(max-width:1000px){.manager-grid{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:540px){.control-row{grid-template-columns:16px minmax(0,1fr) 26px 26px 83px;gap:5px}
+.control-stage-button{width:19px;height:23px}.control-stage{border-radius:11px}
+.control-top{top:10px;left:10px;right:10px;gap:4px}.control-rail{bottom:9px;padding:4px}.control-rail.left{left:8px}.control-rail.right{right:8px}
+}

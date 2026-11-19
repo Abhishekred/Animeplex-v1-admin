@@ -1,6 +1,10 @@
 
 import './style.css';
 import './glass.css';
+import './control_manager.css';
+import { PLAYER_CONTROLS, PLAYER_SLOTS, REGION_CODES, REGION_NAMES,
+  DEFAULT_PLAYER_LAYOUT, cleanPlayerLayout, hiddenPlayerControls,
+  movePlayerControl, reorderPlayerControl } from './control_manager.js';
 import { createClient } from '@supabase/supabase-js';
 import { escapeHtml as esc, isHttpsUrl, validateRelease, shortDate, compareVersions, validUploadParts, APK_CHUNK_BYTES, APK_MAX_BYTES, APK_BUCKET, linkMbToBytes, linkBytesToMb } from './utils.js';
 
@@ -19,6 +23,8 @@ const initialRelease = () => ({
 const state = {
   user: null, member: null, config: null, releases: [], page: 'overview',
   selectedId: null, draft: null, loading: true, busy: false,
+  playerDraft: null, playerDirty: false, playerAllowCustom: true,
+  regionDraft: null, regionDirty: false,
   error: '', loginError: '', mobileOpen: false,
 };
 const iconShapes = {
@@ -32,6 +38,19 @@ const iconShapes = {
   out: '<path d="M13 4h7v7m0-7-9 9"/><path d="M20 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h6"/>',
   cloud: '<path d="M20 16.6A4 4 0 0 0 18 9h-1a6 6 0 0 0-11.8 1A4 4 0 0 0 7 18h11"/><path d="m9 14 3 3 3-3"/>',
   spark: '<path d="m12 3 1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Zm7 13 .8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8L19 16Z"/>',
+  gauge:'<path d="M5 18a9 9 0 1 1 14 0M12 14l4-5"/><circle cx="12" cy="15" r="2"/>',
+  subtitles:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M6 12h5m-5 3h7m1-3h4m-3 3h3"/>',
+  monitor:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M8 13h8"/>',
+  layers:'<path d="m12 2 9 5-9 5-9-5 9-5Zm-9 10 9 5 9-5M3 17l9 5 9-5"/>',
+  film:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 4v16m10-16v16M3 9h4m-4 6h4m10-6h4m-4 6h4"/>',
+  maximize:'<path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/>',
+  'rotate-cw':'<path d="M21 9V3h-6M21 3a9 9 0 1 0 1 12"/>',
+  cast:'<rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 17a4 4 0 0 1 4 4M3 12a9 9 0 0 1 9 9"/>',
+  cpu:'<rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 1v5m6-5v5m-6 12v5m6-5v5M1 9h5M1 15h5m12-6h5m-5 6h5"/>',
+  palette:'<path d="M12 3a9 9 0 1 0 0 18h2a2 2 0 0 0 2-2 2 2 0 0 0-1-2 2 2 0 0 1 1-3 5 5 0 0 0 5-5 9 9 0 0 0-9-6Z"/><circle cx="7" cy="12" r="1"/><circle cx="9" cy="7" r="1"/><circle cx="14" cy="7" r="1"/>',
+  camera:'<path d="M3 7h4l2-3h6l2 3h4v13H3V7Z"/><circle cx="12" cy="13" r="4"/>',
+  moon:'<path d="M20 15A8 8 0 0 1 9 4a8 8 0 1 0 11 11Z"/>',
+  'picture-in-picture':'<rect x="3" y="3" width="18" height="18" rx="2"/><rect x="12" y="12" width="7" height="6" rx="1"/>',
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   toggle: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5"/>',
   pause: '<rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/>',
@@ -110,7 +129,11 @@ function shell() {
         ${nav('Release management','releases','package')}
       </div>
       <div class="nav-section" style="margin-top:24px">Management</div>
-      <div class="nav-list">${nav('Update settings','settings','sliders')}</div>
+      <div class="nav-list">
+        ${nav('Player controls','controls','sliders')}
+        ${nav('Streaming region','region','globe')}
+        ${nav('Update settings','settings','sliders')}
+      </div>
       <div class="nav-spacer"></div>
       <div class="side-status"><div class="side-status-title"><i class="online-dot" style="${c.enabled ? '' : 'background:#e8aa5d;box-shadow:0 0 9px #e8aa5d6b'}"></i> ${esc(stateLabel)}</div>
         <div class="side-status-sub">Only published updates can reach the app. GitHub releases are never auto-announced.</div>
@@ -122,13 +145,13 @@ function shell() {
     </aside>
     <main class="main">
       <div class="topbar"><div class="mobile-top"><button type="button" class="icon-btn" data-action="menu" aria-label="Open menu">${icon('menu',22)}</button></div>
-      <div class="breadcrumb"><span>AnimePlex</span> ${icon('arrow',13)} <strong>${state.page === 'overview' ? 'Overview' : state.page === 'releases' ? 'Releases' : 'Update settings'}</strong></div>
+      <div class="breadcrumb"><span>AnimePlex</span> ${icon('arrow',13)} <strong>${state.page === 'overview' ? 'Overview' : state.page === 'releases' ? 'Releases' : state.page === 'controls' ? 'Player controls' : state.page === 'region' ? 'Streaming region' : 'Update settings'}</strong></div>
       <div class="bar-actions"><span class="bar-time">${esc(new Date().toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}))}</span>
         <div class="bar-chip">${icon('shield',15)} Secure workspace</div>
       </div></div>
       <div class="content">
         ${state.error ? `<div class="alert warning" style="margin-bottom:22px">${icon('alert',19)} ${esc(state.error)}</div>` : ''}
-        ${state.page === 'overview' ? overview() : state.page === 'releases' ? releasePage() : settingsPage()}
+        ${state.page === 'overview' ? overview() : state.page === 'releases' ? releasePage() : state.page === 'controls' ? controlsPage() : state.page === 'region' ? regionPage() : settingsPage()}
       </div>
     </main></div>`;
 }
@@ -344,6 +367,148 @@ function settingsPage() {
       </div></section>
     </div></div>`;
 }
+
+const controlByName = Object.fromEntries(PLAYER_CONTROLS.map(v=>[v.id,v]));
+const laneNames={top:'TOP BAR',left:'LEFT SIDE',right:'RIGHT SIDE',hidden:'HIDDEN'};
+function playerDraft() {
+  if (!state.playerDraft) state.playerDraft=cleanPlayerLayout(config().player_controls ?? DEFAULT_PLAYER_LAYOUT);
+  return state.playerDraft;
+}
+function controlPreview() {
+  const layout=playerDraft();
+  const buttons=(ids)=>ids.map(id=> {
+    const entry=controlByName[id];
+    return entry? `<span class="control-stage-button" title="${esc(entry.label)}">${icon(entry.icon,19)}</span>`:'';
+  }).join('');
+  return `<div class="control-stage" aria-label="Player layout preview">
+    <div class="control-top"><span class="control-stage-button fixed">${icon('arrow',17)}</span>
+    <span class="control-stage-title">Show title · E2</span>${buttons(layout.top)}
+    <span class="control-stage-button fixed">${icon('lock',19)}</span>
+    <span class="control-stage-button fixed">${icon('sliders',19)}</span></div>
+    <div class="control-rail left">${buttons(layout.left)}</div>
+    <div class="control-rail right">${buttons(layout.right)}</div>
+  </div>`;
+}
+function controlLane(slot) {
+  const layout=playerDraft();
+  const ids=slot==='hidden'?hiddenPlayerControls(layout):layout[slot];
+  return `<section class="control-lane" data-control-lane="${slot}">
+    <h3>${esc(laneNames[slot])}${slot==='top'?' · '+ids.length+'/5':''}</h3>
+    ${ids.length?ids.map((id,index)=>{
+      const c=controlByName[id], options=PLAYER_SLOTS
+        .filter(target=>target===slot||!(c.pinned&&target==='hidden'))
+        .map(target=>`<option value="${target}" ${target===slot?'selected':''}>${esc(laneNames[target])}</option>`).join('');
+      return `<div class="control-row" draggable="true" data-control-id="${esc(id)}">
+        <span style="cursor:grab" title="Drag to arrange">⋮⋮</span>
+        <span class="control-row-label">${icon(c.icon,18)} <span title="${esc(c.label)}">${esc(c.label)}${c.pinned?' · Pinned':''}</span></span>
+        <button class="control-mini" data-action="control-up" data-id="${esc(id)}" ${slot==='hidden'||index===0?'disabled':''} title="Move up">↑</button>
+        <button class="control-mini" data-action="control-down" data-id="${esc(id)}" ${slot==='hidden'||index===ids.length-1?'disabled':''} title="Move down">↓</button>
+        <select class="control-select" data-control-place="${esc(id)}" aria-label="Move ${esc(c.label)}">${options}</select>
+      </div>`;
+    }).join(''):'<div class="control-empty">Drop buttons here, or use the Move selector</div>'}
+  </section>`;
+}
+function controlsPage() {
+  const c=config(),layout=playerDraft();
+  return `${heading('Remote configuration','Player <span>controls</span>',
+    'Manage the real Android player layout. Preview changes before publishing to the app.')}
+    <div class="manager-grid">
+      <div class="stack">
+        <section class="card">
+          <div class="card-head"><div><h2>Live player preview</h2><p>Updates immediately while you arrange buttons</p></div>
+          <span class="pill ${c.player_controls_enabled?'published':'paused'}">${c.player_controls_enabled?'Published':'Not active'}</span></div>
+          <div class="card-body stack">
+            ${controlPreview()}
+            <div class="manager-note">Back, Lock and Settings are fixed safety controls. Top bar holds a maximum of 5 movable controls. Hidden controls remain reachable through More.</div>
+            ${switchSetting('allow_player_customization','Let users customize controls','ON preserves each viewer’s personal layout. OFF enforces this admin layout for everyone.',state.playerAllowCustom)}
+            ${state.playerDirty?'<div class="alert warning">Unpublished changes. Users still see the last published layout.</div>':''}
+            <div class="manager-actions">
+              <button class="btn btn-primary" data-action="publish-player-controls">${icon('save',16)} Publish player controls</button>
+              <button class="btn btn-ghost" data-action="reset-player-draft">${icon('refresh',15)} Reset editor</button>
+              ${c.player_controls_enabled?'<button class="btn btn-ghost" data-action="disable-player-controls">Disable admin override</button>':''}
+            </div>
+          </div>
+        </section>
+      </div>
+      <div class="control-lanes">
+        ${PLAYER_SLOTS.map(controlLane).join('')}
+      </div>
+    </div>`;
+}
+function regionPage() {
+  const c=config(), r=state.regionDraft || {
+    streaming_region:c.streaming_region || 'IN',
+    allow_region_customization:c.allow_region_customization!==false,
+  };
+  state.regionDraft=r;
+  return `${heading('Remote configuration','Streaming <span>region</span>',
+    'Choose the TMDB watch-region catalogue seen in AnimePlex. This does not change device language, VPN or stream geoblocks.')}
+    <div class="dual-grid">
+      <div class="stack">
+        <section class="card">
+          <div class="card-head"><div><h2>Country catalogue</h2><p>One region, synced across your audience</p></div>${icon('globe',22)}</div>
+          <div class="card-body stack">
+            <div><label for="admin-streaming-region" class="label">Select streaming region</label>
+            <select class="field region-select" id="admin-streaming-region">
+              ${REGION_CODES.map(code=>`<option value="${code}" ${r.streaming_region===code?'selected':''}>${code} · ${esc(REGION_NAMES[code])}</option>`).join('')}
+            </select></div>
+            ${switchSetting('allow_region_customization','Let viewers change their region',
+              'ON uses this as a default if they have not chosen one. OFF locks this region for every device.',r.allow_region_customization)}
+            ${state.regionDirty?'<div class="alert warning">Region changes are not published yet.</div>':''}
+            <div class="manager-actions">
+              <button class="btn btn-primary" data-action="publish-region">${icon('save',16)} Publish region</button>
+              ${c.streaming_region_enabled?'<button class="btn btn-ghost" data-action="disable-region">Disable region override</button>':''}
+            </div>
+          </div>
+        </section>
+      </div>
+      <div class="stack">
+        <section class="card">
+          <div class="card-head"><div><h2>Live distribution status</h2></div><span class="pill ${c.streaming_region_enabled?'published':'paused'}">${c.streaming_region_enabled?'Active':'Inactive'}</span></div>
+          <div class="card-body stack">
+            <div class="kpi-inline">${icon('globe',17)} Currently published region: <b>${esc(c.streaming_region || 'IN')}</b></div>
+            <div class="kpi-inline">${icon('lock',17)} User override: <b>${c.allow_region_customization===false?'Locked':'Allowed'}</b></div>
+            <div class="alert">${icon('info',16)} Once published, the connected APK reads this setting anonymously from Supabase. Offline devices keep their last synced region.</div>
+          </div>
+        </section>
+      </div>
+    </div>`;
+}
+function updateControlDraft(next) {
+  state.playerDraft=cleanPlayerLayout(next);
+  state.playerDirty=true;
+  render();
+}
+async function publishAdminControls() {
+  if(state.busy)return;
+  if(!window.confirm('Publish this player layout to connected AnimePlex apps?'))return;
+  await mutate(async()=>{
+    const {error}=await supabase.from('animeplex_update_config')
+      .update({player_controls:cleanPlayerLayout(playerDraft()),
+        player_controls_enabled:true,
+        allow_player_customization:state.playerAllowCustom,
+        updated_at:new Date().toISOString()}).eq('id',true);
+    if(error)throw error;
+    state.playerDirty=false;
+    toast('Player layout published. The app syncs it on launch/foreground.');
+  });
+}
+async function publishAdminRegion() {
+  if(state.busy)return;
+  const draft=state.regionDraft;
+  if(!draft||!REGION_CODES.includes(draft.streaming_region))return toast('Choose a valid region.',true);
+  if(!window.confirm(`Publish ${draft.streaming_region} streaming region to AnimePlex?`))return;
+  await mutate(async()=>{
+    const {error}=await supabase.from('animeplex_update_config')
+      .update({streaming_region:draft.streaming_region,
+        allow_region_customization:draft.allow_region_customization,
+        streaming_region_enabled:true,updated_at:new Date().toISOString()}).eq('id',true);
+    if(error)throw error;
+    state.regionDirty=false;
+    toast('Streaming region published.');
+  });
+}
+
 function render() {
   if (!supabase) {
     root.innerHTML = `<div class="auth"><div class="auth-layout"><div class="auth-brand">${brand()}</div><div class="auth-card"><h1 class="auth-title">Connect Supabase</h1><p class="auth-copy">Public VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are required in Vercel environment settings. Never expose a service-role secret.</p></div></div></div>`;
@@ -372,6 +537,14 @@ async function loadData({quiet=false}={}) {
     if (releases.error) throw releases.error;
     state.config = settings.data;
     state.releases = releases.data || [];
+    if(!state.playerDirty || !state.playerDraft){
+      state.playerDraft=cleanPlayerLayout(state.config?.player_controls ?? DEFAULT_PLAYER_LAYOUT);
+      state.playerAllowCustom=state.config?.allow_player_customization!==false;
+    }
+    if(!state.regionDirty || !state.regionDraft){
+      state.regionDraft={streaming_region:state.config?.streaming_region || 'IN',
+        allow_region_customization:state.config?.allow_region_customization!==false};
+    }
     state.error = '';
   } catch(e) {
     state.error = 'Could not read update control data: ' + errorMessage(e);
@@ -591,14 +764,27 @@ document.addEventListener('change',async(e)=>{
       : '';
     return;
   }
+  if(e.target?.dataset?.controlPlace){
+    updateControlDraft(movePlayerControl(playerDraft(),e.target.dataset.controlPlace,e.target.value));
+    return;
+  }
+  if(e.target?.id==='admin-streaming-region'){
+    state.regionDraft.streaming_region=e.target.value;state.regionDirty=true;render();return;
+  }
   const key=e.target?.dataset?.setting;
+  if(key==='allow_player_customization'){
+    state.playerAllowCustom=e.target.checked;state.playerDirty=true;render();return;
+  }
+  if(key==='allow_region_customization'){
+    state.regionDraft.allow_region_customization=e.target.checked;state.regionDirty=true;render();return;
+  }
   if(!key||!['enabled','auto_check','beta_enabled'].includes(key))return;
   const value=e.target.checked;
   await saveSettings({[key]:value},key==='enabled'?(value?'Update delivery enabled.':'All update offers paused.'):'Update setting saved.');
 });
 document.addEventListener('click',async(e)=>{
   const page=e.target.closest('[data-page]')?.dataset.page;
-  if(page&&['overview','releases','settings'].includes(page)){
+  if(page&&['overview','releases','settings','controls','region'].includes(page)){
     state.page=page;state.mobileOpen=false;state.error='';render();window.scrollTo(0,0);return;
   }
   const btn=e.target.closest('[data-action]');
@@ -606,6 +792,23 @@ document.addEventListener('click',async(e)=>{
   const action=btn.dataset.action;
   if(action==='menu'){state.mobileOpen=true;render();}
   if(action==='close-menu'){state.mobileOpen=false;render();}
+  if(action==='control-up'||action==='control-down'){
+    updateControlDraft(reorderPlayerControl(playerDraft(),btn.dataset.id,action==='control-up'?-1:1));
+    return;
+  }
+  if(action==='reset-player-draft'){
+    state.playerDraft=cleanPlayerLayout(config().player_controls ?? DEFAULT_PLAYER_LAYOUT);
+    state.playerAllowCustom=config().allow_player_customization!==false;
+    state.playerDirty=false;render();return;
+  }
+  if(action==='publish-player-controls'){await publishAdminControls();return;}
+  if(action==='publish-region'){await publishAdminRegion();return;}
+  if(action==='disable-player-controls'||action==='disable-region'){
+    if(!window.confirm('Disable this admin override? Users will return to their local settings.'))return;
+    await saveSettings(action==='disable-player-controls'?
+      {player_controls_enabled:false}:{streaming_region_enabled:false},
+      'Admin override disabled.');return;
+  }
   if(action==='new-release'){state.page='releases';state.selectedId=null;state.draft=initialRelease();state.mobileOpen=false;render();window.scrollTo(0,0);}
   if(action==='select-release')selectRelease(btn.dataset.id);
   if(action==='publish')await publishRelease();
@@ -615,6 +818,26 @@ document.addEventListener('click',async(e)=>{
     await supabase.auth.signOut();
     state.user=null;state.member=null;state.releases=[];state.page='overview';state.loginError='';render();
   }
+});
+// HTML5 drag-and-drop supports both placement and reordering between lanes.
+document.addEventListener('dragstart',(e)=>{
+  const row=e.target.closest('[data-control-id]');
+  if(row?.draggable && e.dataTransfer){
+    e.dataTransfer.setData('text/plain',row.dataset.controlId);
+    e.dataTransfer.effectAllowed='move';
+  }
+});
+document.addEventListener('dragover',(e)=>{
+  if(e.target.closest('[data-control-lane]'))e.preventDefault();
+});
+document.addEventListener('drop',(e)=>{
+  const lane=e.target.closest('[data-control-lane]');
+  if(!lane || !e.dataTransfer)return;
+  e.preventDefault();
+  const id=e.dataTransfer.getData('text/plain');
+  const beforeId=e.target.closest('[data-control-id]')?.dataset.controlId;
+  if(id && id!==beforeId)
+    updateControlDraft(movePlayerControl(playerDraft(),id,lane.dataset.controlLane,beforeId));
 });
 document.addEventListener('input',(e)=>{
   if(!e.target.closest('#release-form'))return;

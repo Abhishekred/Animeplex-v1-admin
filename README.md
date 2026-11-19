@@ -34,3 +34,16 @@ Sign in with an **existing Supabase Auth account that already has an active admi
 `app_releases` and old admin frontend code are not used. This project uses isolated `animeplex_update_*` tables with RLS. The Flutter app's `UpdateService` is their only update source after the paired app patch lands.
 
 **Production domain is not changed by committing to `admin`.** Vercel Git integration may automatically create a preview deployment for the branch.
+
+
+## Remote player controls and streaming region
+The admin branch now includes **Player controls** and **Streaming region** pages.
+Control placement can be dragged between Top/Left/Right/Hidden, rearranged using up/down,
+previewed live, then explicitly published. Back/Lock/Settings remain fixed, More
+cannot be hidden, and Top has a maximum of five controls.
+
+Streaming region can be published separately (20 supported country codes).
+Each page can either lock the admin choice for viewers or allow per-device overrides.
+The new APK fetches the public config for guests on launch and foreground resume,
+with last-known offline caching. These configuration fields are independent of APK
+release publication and do not touch the APK upload system.
