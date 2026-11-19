@@ -470,7 +470,7 @@ async function saveDraft(form) {
   if (method === 'upload' && file) {
     // Validate version and other fields before uploading large APK bytes.
     const version=String(input.version??'').trim();
-    if(!/^v?\\d+(\\.\\d+){1,3}(-[a-zA-Z0-9.-]+)?$/.test(version)) {
+    if(!/^v?\d+(\.\d+){1,3}(-[a-zA-Z0-9.-]+)?$/.test(version)) {
       toast('Enter a valid version before uploading.',true);return;
     }
   } else {
