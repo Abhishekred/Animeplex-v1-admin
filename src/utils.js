@@ -37,10 +37,16 @@ export function validateRelease(row) {
   if (!isHttpsUrl(row.apk_url)) {
     return { error: 'Use a public HTTPS direct-download URL for a SIGNED APK.' };
   }
+  // Store pages and redirects (such as APKPure package pages) are not APK
+  // assets; the in-app installer needs the actual signed .apk download.
+  if (!new URL(String(row.apk_url).trim()).pathname.toLowerCase().endsWith('.apk')) {
+    return { error: 'The APK URL must lead directly to a signed .apk file (not a store page or redirect).' };
+  }
   if (String(row.release_notes ?? '').length > 20000) return { error: 'Release notes are too long.' };
   if (String(row.title ?? '').length > 180) return { error: 'Title is too long.' };
   const size = Number(row.apk_size ?? 0);
   if (!Number.isSafeInteger(size) || size < 0) return { error: 'APK size must be a non-negative number of bytes.' };
+  if (size > 0 && size < 1000000) return { error: 'APK size is in BYTES, not MB. Enter the true size (at least 1,000,000 bytes), or 0 to skip verification.' };
   if (!['stable', 'beta'].includes(row.channel)) return { error: 'Choose stable or beta.' };
   return { data: { version, title: String(row.title ?? '').trim(), release_notes: String(row.release_notes ?? '').trim(), apk_url: String(row.apk_url).trim(), apk_size: size, channel: row.channel, mandatory: Boolean(row.mandatory) } };
 }

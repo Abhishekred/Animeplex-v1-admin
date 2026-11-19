@@ -19,6 +19,23 @@ test('published candidate requires a signed-APK link field and valid version', (
   assert.ok(validateRelease({version:'wrong',channel:'beta',apk_url:'https://example.com/app.apk'}).error);
   assert.ok(validateRelease({version:'2.3.8',channel:'stable',apk_url:'http://example.com/app.apk'}).error);
 });
+test('rejects non-APK download links and size values typed in MB', () => {
+  assert.match(validateRelease({
+    version:'2.3.8',channel:'stable',
+    apk_url:'https://d.apkpure.com/b/APK/com.Animeplex.music?version=latest',
+    apk_size:24,
+  }).error, /signed .apk/);
+  assert.match(validateRelease({
+    version:'2.3.8',channel:'stable',
+    apk_url:'https://example.com/AnimePlex.apk',
+    apk_size:24,
+  }).error, /BYTES/);
+  assert.ok(validateRelease({
+    version:'2.3.8',channel:'stable',
+    apk_url:'https://example.com/AnimePlex.apk',
+    apk_size:120000000,
+  }).data);
+});
 test('dynamic text is escaped', () => {
   assert.equal(escapeHtml('<script>'), '&lt;script&gt;');
 });

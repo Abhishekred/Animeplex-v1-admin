@@ -219,6 +219,7 @@ function editor() {
   const row = state.draft ?? selected ?? initialRelease();
   const locked = selected?.status === 'published';
   const status = selected?.status ?? 'new';
+  const warning = selected && validateRelease(row).error;
   const details = selected
     ? `<span>${pill(selected.status)} <span class="pill ${esc(selected.channel)}">${esc(selected.channel)}</span></span>`
     : '<span class="pill draft">New draft</span>';
@@ -236,8 +237,8 @@ function editor() {
       </div>
       ${field('Release title','title',row.title,'Performance improvements',{disabled:locked,wide:true})}
       ${field('Signed APK direct download URL *','apk_url',row.apk_url,'https://github.com/.../releases/download/v2.3.7/AnimePlex.apk',
-        {disabled:locked,wide:true,required:true,hint:'Use a public HTTPS asset link to a SIGNED .apk. GitHub Actions unsigned artifacts cannot install.'})}
-      ${field('APK size (bytes)','apk_size',row.apk_size || 0,'0',{type:'number',disabled:locked,hint:'Optional; 0 disables size checking.'})}
+        {disabled:locked,wide:true,required:true,hint:'Use a DIRECT HTTPS URL ending in .apk to your SIGNED file. APKPure/store pages and unsigned GitHub Actions artifacts cannot install.'})}
+      ${field('APK size (bytes)','apk_size',row.apk_size || 0,'0',{type:'number',disabled:locked,hint:'Enter the exact file size in bytes, not MB. Set 0 if unknown.'})}
       <div><div class="label">Required update</div>
         <div class="toggle-line" style="padding:11px 0;border:0"><div><div class="toggle-text">Mark as mandatory</div>
         <div class="toggle-help">App will not offer “Skip version” for this release.</div></div>
@@ -254,6 +255,7 @@ function editor() {
       ${selected && selected.status === 'draft' ? `<button type="button" class="btn btn-danger btn-sm" data-action="delete" ${state.busy ? 'disabled' : ''}>${icon('trash',15)} Delete draft</button>` : ''}
       <span class="form-note">${status === 'published' ? 'Live · visible to eligible users' : 'Not publicly announced unless published'}</span>
     </div></form>
+    ${warning ? `<div style="padding:0 25px 16px"><div class="alert warning">${icon('alert',18)} <div><strong>APK configuration needs fixing:</strong> ${esc(warning)} Pause this release, then correct the APK URL and size before publishing again.</div></div></div>` : ''}
     <div style="padding:0 25px 24px"><div class="alert ${status === 'published' ? 'success' : 'warning'}">
       ${icon(status === 'published' ? 'check' : 'info',18)}
       <div>${status === 'published' ? 'This release is published. Pause it before changing the APK or notes.' :
