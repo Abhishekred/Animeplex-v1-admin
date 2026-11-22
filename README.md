@@ -47,3 +47,18 @@ Each page can either lock the admin choice for viewers or allow per-device overr
 The new APK fetches the public config for guests on launch and foreground resume,
 with last-known offline caching. These configuration fields are independent of APK
 release publication and do not touch the APK upload system.
+
+## About-page remote social links
+
+The **About page** navigation item edits two public social fields:
+`animeplex_update_config.about_website_url` and
+`animeplex_update_config.about_instagram_handle`. Apply
+`sql/about-page-controls.sql` to the existing AnimePlex Supabase project.
+The default website is `https://Abhishek.dpdns.org/`; the default Instagram
+handle is `animeplexofficial`. Saving inherits the singleton config's
+existing admin-only UPDATE RLS and public SELECT policy.
+
+The currently installed AnimePlex app and `test2` branch still use hardcoded
+About social links. App-side sync is a separate required step; editing in this
+admin branch alone will not change users' About screens. No releases, player
+controls or streaming region behavior are changed.
