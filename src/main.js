@@ -6,7 +6,7 @@ import { PLAYER_CONTROLS, PLAYER_SLOTS, REGION_CODES, REGION_NAMES,
   DEFAULT_PLAYER_LAYOUT, cleanPlayerLayout, hiddenPlayerControls,
   movePlayerControl, reorderPlayerControl } from './control_manager.js';
 import { createClient } from '@supabase/supabase-js';
-import { escapeHtml as esc, isHttpsUrl, validateRelease, shortDate, compareVersions, validUploadParts, APK_CHUNK_BYTES, APK_MAX_BYTES, APK_BUCKET, linkMbToBytes, linkBytesToMb } from './utils.js';
+import { escapeHtml as esc, isHttpsUrl, validateRelease, shortDate, compareVersions, validUploadParts, APK_CHUNK_BYTES, APK_MAX_BYTES, APK_BUCKET, linkMbToBytes, linkBytesToMb, validateAboutSettings, normalizeInstagramHandle } from './utils.js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -132,6 +132,7 @@ function shell() {
       <div class="nav-list">
         ${nav('Player controls','controls','sliders')}
         ${nav('Streaming region','region','globe')}
+        ${nav('About page','about','globe')}
         ${nav('Update settings','settings','sliders')}
       </div>
       <div class="nav-spacer"></div>
@@ -145,13 +146,13 @@ function shell() {
     </aside>
     <main class="main">
       <div class="topbar"><div class="mobile-top"><button type="button" class="icon-btn" data-action="menu" aria-label="Open menu">${icon('menu',22)}</button></div>
-      <div class="breadcrumb"><span>AnimePlex</span> ${icon('arrow',13)} <strong>${state.page === 'overview' ? 'Overview' : state.page === 'releases' ? 'Releases' : state.page === 'controls' ? 'Player controls' : state.page === 'region' ? 'Streaming region' : 'Update settings'}</strong></div>
+      <div class="breadcrumb"><span>AnimePlex</span> ${icon('arrow',13)} <strong>${state.page === 'overview' ? 'Overview' : state.page === 'releases' ? 'Releases' : state.page === 'controls' ? 'Player controls' : state.page === 'region' ? 'Streaming region' : state.page === 'about' ? 'About page' : 'Update settings'}</strong></div>
       <div class="bar-actions"><span class="bar-time">${esc(new Date().toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}))}</span>
         <div class="bar-chip">${icon('shield',15)} Secure workspace</div>
       </div></div>
       <div class="content">
         ${state.error ? `<div class="alert warning" style="margin-bottom:22px">${icon('alert',19)} ${esc(state.error)}</div>` : ''}
-        ${state.page === 'overview' ? overview() : state.page === 'releases' ? releasePage() : state.page === 'controls' ? controlsPage() : state.page === 'region' ? regionPage() : settingsPage()}
+        ${state.page === 'overview' ? overview() : state.page === 'releases' ? releasePage() : state.page === 'controls' ? controlsPage() : state.page === 'region' ? regionPage() : state.page === 'about' ? aboutPage() : settingsPage()}
       </div>
     </main></div>`;
 }
@@ -366,6 +367,50 @@ function settingsPage() {
         <div class="security-row">${icon('check')} Draft releases stay private until published</div>
       </div></section>
     </div></div>`;
+}
+
+
+function aboutPage() {
+  const c = config();
+  const website = String(c.about_website_url || 'https://Abhishek.dpdns.org/');
+  const handle = String(c.about_instagram_handle || 'animeplexofficial').replace(/^@/, '');
+  const siteLabel = website.startsWith('https://') ? website.slice(8) : website;
+  return `${heading('Remote configuration','About <span>page</span>',
+    'Edit the website URL and Instagram handle displayed in AnimePlex About → Social.')}
+    <div class="dual-grid">
+      <section class="card">
+        <div class="card-head"><div><h2>Social links</h2><p>Admin-only editing through protected Supabase settings</p></div>${icon('edit',20)}</div>
+        <form id="about-form" class="card-body stack">
+          <div>
+            <label class="label" for="about-website">Website URL</label>
+            <input class="field" id="about-website" name="about_website_url" type="url" required
+              maxlength="512" value="${esc(website)}" placeholder="https://Abhishek.dpdns.org/" autocomplete="url">
+            <div class="hint">Include https:// — this will become the displayed website and destination link.</div>
+          </div>
+          <div>
+            <label class="label" for="about-instagram">Instagram handle</label>
+            <input class="field" id="about-instagram" name="about_instagram_handle" type="text" required
+              maxlength="31" value="${esc(handle)}" placeholder="@animeplexofficial"
+              autocapitalize="off" spellcheck="false" autocomplete="off">
+            <div class="hint">Use @username or username; the profile URL is generated from this handle.</div>
+          </div>
+          <div class="alert">${icon('info',17)} Changes save to Supabase. Current test2 APK uses hardcoded social links, so app-side sync is still needed before changes appear on devices.</div>
+          <button type="submit" class="btn btn-primary" style="justify-self:start" ${state.busy?'disabled':''}>${icon('save',16)} Save About settings</button>
+        </form>
+      </section>
+      <section class="card">
+        <div class="card-head"><div><h2>About page preview</h2><p>How the two social entries will look</p></div><span class="pill">Preview only</span></div>
+        <div class="card-body">
+          <div class="about-phone">
+            <div class="about-phone-brand">AnimePlex<span>About</span></div>
+            <div class="about-preview-label">SOCIAL</div>
+            <div class="about-preview-row">${icon('globe',20)}<div><strong>Website</strong><small id="about-preview-website">${esc(siteLabel)}</small></div></div>
+            <div class="about-preview-row">${icon('camera',20)}<div><strong>Instagram</strong><small id="about-preview-instagram">@${esc(handle)}</small></div></div>
+          </div>
+          <div class="hint">Preview is local to the admin editor, not the installed app.</div>
+        </div>
+      </section>
+    </div>`;
 }
 
 const controlByName = Object.fromEntries(PLAYER_CONTROLS.map(v=>[v.id,v]));
@@ -746,6 +791,23 @@ document.addEventListener('submit',async(e)=>{
     if(!isHttpsUrl(url)){toast('Repository URL must be HTTPS.',true);return;}
     await saveSettings({repository_url:url},'Repository link saved.');
   }
+  if(e.target.id==='about-form'){
+    e.preventDefault();
+    const checked=validateAboutSettings(Object.fromEntries(new FormData(e.target)));
+    if(checked.error){toast(checked.error,true);return;}
+    await saveSettings(checked.data,'About social links saved.');
+  }
+});
+document.addEventListener('input',(e)=>{
+  const form=e.target.closest('#about-form');
+  if(!form)return;
+  const site=String(form.elements.namedItem('about_website_url')?.value ?? '').trim();
+  const rawHandle=form.elements.namedItem('about_instagram_handle')?.value ?? '';
+  const siteLabel=site.startsWith('https://') ? site.slice(8) : site;
+  const sitePreview=document.getElementById('about-preview-website');
+  const instagramPreview=document.getElementById('about-preview-instagram');
+  if(sitePreview)sitePreview.textContent=siteLabel;
+  if(instagramPreview)instagramPreview.textContent='@'+(normalizeInstagramHandle(rawHandle) || String(rawHandle).trim().replace(/^@/,''));
 });
 document.addEventListener('change',async(e)=>{
   if (e.target?.name === 'delivery_method') {
@@ -785,7 +847,7 @@ document.addEventListener('change',async(e)=>{
 });
 document.addEventListener('click',async(e)=>{
   const page=e.target.closest('[data-page]')?.dataset.page;
-  if(page&&['overview','releases','settings','controls','region'].includes(page)){
+  if(page&&['overview','releases','settings','controls','region','about'].includes(page)){
     state.page=page;state.mobileOpen=false;state.error='';render();window.scrollTo(0,0);return;
   }
   const btn=e.target.closest('[data-action]');
