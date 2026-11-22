@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { compareVersions, isHttpsUrl, validateRelease, escapeHtml, validUploadParts, APK_CHUNK_BYTES, linkMbToBytes, linkBytesToMb } from '../src/utils.js';
+import { compareVersions, isHttpsUrl, validateRelease, escapeHtml, validUploadParts, APK_CHUNK_BYTES, linkMbToBytes, linkBytesToMb, validateAboutSettings, normalizeInstagramHandle } from '../src/utils.js';
 
 test('version ordering stable beats prerelease and compares numeric components', () => {
   assert.equal(compareVersions('2.3.10', '2.3.9'), 1);
@@ -90,4 +90,16 @@ test('multipart APK upload is valid with ordered, safe, correctly sized chunks',
   assert.equal(result.data.delivery_method,'upload');
   assert.equal(result.data.apk_url,null);
   assert.equal(result.data.apk_parts.length,2);
+});
+
+test('About settings require HTTPS and validate Instagram handle', () => {
+  const valid=validateAboutSettings({about_website_url:' https://Abhishek.dpdns.org/ ',
+    about_instagram_handle:'@animeplexofficial'});
+  assert.deepEqual(valid.data,{about_website_url:'https://Abhishek.dpdns.org/',
+    about_instagram_handle:'animeplexofficial'});
+  assert.equal(normalizeInstagramHandle('@Abhishek_07'),'Abhishek_07');
+  assert.equal(normalizeInstagramHandle('bad user'),null);
+  assert.equal(normalizeInstagramHandle('a..b'),null);
+  assert.ok(validateAboutSettings({about_website_url:'http://example.com',about_instagram_handle:'valid'}).error);
+  assert.ok(validateAboutSettings({about_website_url:'https://example.com',about_instagram_handle:'<script>'}).error);
 });
