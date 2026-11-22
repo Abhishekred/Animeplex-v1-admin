@@ -13,6 +13,24 @@ export function isHttpsUrl(value) {
   } catch { return false; }
 }
 
+
+/** Validate About-page links while retaining the existing admin config RLS. */
+export function normalizeInstagramHandle(value) {
+  const handle = String(value ?? '').trim().replace(/^@/, '');
+  if (!/^[A-Za-z0-9._]{1,30}$/.test(handle) ||
+      handle.startsWith('.') || handle.endsWith('.') || handle.includes('..')) return null;
+  return handle;
+}
+export function validateAboutSettings(values) {
+  const website = String(values?.about_website_url ?? '').trim();
+  if (!isHttpsUrl(website) || website.length > 512) {
+    return { error: 'Website URL must be valid HTTPS and at most 512 characters.' };
+  }
+  const handle = normalizeInstagramHandle(values?.about_instagram_handle);
+  if (!handle) return { error: 'Instagram handle must be a valid username (1–30 characters).' };
+  return { data: { about_website_url: website, about_instagram_handle: handle } };
+}
+
 export function compareVersions(a, b) {
   const parts = (v) => {
     const [core, pre] = String(v ?? '').replace(/^v/i, '').split('-', 2);
