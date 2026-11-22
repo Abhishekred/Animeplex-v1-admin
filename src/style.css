@@ -10,3 +10,14 @@
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 
 @media(max-width:1120px){.release-grid{grid-template-columns:1fr!important}}
+
+/* About-page social links live preview. */
+.about-phone{max-width:375px;margin:auto;padding:26px 18px;border-radius:22px;background:linear-gradient(160deg,#0c0b14,#191620);border:1px solid #343149;box-shadow:0 16px 50px #0004}
+.about-phone-brand{text-align:center;font-family:'Space Grotesk',sans-serif;font-weight:800;font-size:23px;color:#f5efff;margin-bottom:32px}
+.about-phone-brand span{display:block;font:600 12px 'DM Sans',sans-serif;color:#8e8b9e;margin-top:7px}
+.about-preview-label{letter-spacing:1.8px;font-size:10px;font-weight:800;color:#8c8b9a;margin-bottom:12px}
+.about-preview-row{display:flex;align-items:center;gap:16px;padding:16px 13px;background:#191820;border-bottom:1px solid #32303a;color:#a9a8bc}
+.about-preview-row div{min-width:0}
+.about-preview-row strong{display:block;font-size:13px;color:#f1f0f7}
+.about-preview-row small{display:block;margin-top:6px;color:#a9a6b7;font-size:12px;overflow-wrap:anywhere}
+.about-preview-row:last-child{border-bottom:0}
