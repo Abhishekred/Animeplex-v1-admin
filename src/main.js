@@ -4,7 +4,8 @@ import './glass.css';
 import './control_manager.css';
 import './admin_management.css';
 import { canManageUsers, usersPage, providersPage, loadAdminUsers, openAdminUser,
-  loadAdminProviders, saveAdminProvider, changeAdminProvider, removeAdminProvider }
+  loadAdminProviders, saveAdminProvider, changeAdminProvider, removeAdminProvider,
+  setAdminUserSourcesAccess }
   from './admin_management.js';
 import { PLAYER_CONTROLS, PLAYER_SLOTS, REGION_CODES, REGION_NAMES,
   DEFAULT_PLAYER_LAYOUT, cleanPlayerLayout, hiddenPlayerControls,
@@ -890,6 +891,17 @@ document.addEventListener('click',async(e)=>{
       if(action==='user-prev')await loadAdminUsers(supabase,state,state.userSearch,Math.max(0,state.userOffset-25));
       if(action==='user-next')await loadAdminUsers(supabase,state,state.userSearch,state.userOffset+25);
       if(action==='refresh-users')await loadAdminUsers(supabase,state,state.userSearch,state.userOffset);
+      render();
+    } catch(error){toast(errorMessage(error),true);}
+    return;
+  }
+  if(action==='toggle-sources-access'){
+    try {
+      const id=btn.dataset.id;
+      if (!state.userDetail || state.userDetail.user?.id !== id) throw new Error('User profile not open.');
+      const newValue = state.userDetail.sourcesAccess !== true;
+      await setAdminUserSourcesAccess(supabase,state,id,newValue);
+      toast(newValue ? 'Sources access granted to this user.' : 'Sources access revoked.');
       render();
     } catch(error){toast(errorMessage(error),true);}
     return;

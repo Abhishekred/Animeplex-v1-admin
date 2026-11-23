@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validateManagedProvider, canManageUsers, usersPage, providersPage } from '../src/admin_management.js';
+import { validateManagedProvider, canManageUsers, usersPage, providersPage,
+  setAdminUserSourcesAccess } from '../src/admin_management.js';
 
 const input = {
   label: 'MovieBox', repo_url: 'https://raw.githubusercontent.com/Abhishekred/Stream-1/test/repo.json',
@@ -42,4 +43,30 @@ test('dashboard escapes untrusted usernames and provider metadata',()=>{
     {...input,id:'abc',label:'<iframe>'}]});
   assert.doesNotMatch(providers,/<iframe>/);
   assert.match(providers,/&lt;iframe&gt;/);
+});
+
+test('admin can grant and revoke per-user Sources access; never other accounts',async()=>{
+  const user={id:'user-1',email:'one@example.com'};
+  const state={member:{role:'owner'},userDetail:{user,sourcesAccess:false}};
+  const calls=[];
+  const db={rpc:async(name,args)=>{
+    calls.push([name,args]);return {data:args.p_allowed,error:null};
+  }};
+  const html=usersPage(state);
+  assert.match(html,/Grant Sources access/);
+  await setAdminUserSourcesAccess(db,state,'user-1',true);
+  assert.equal(state.userDetail.sourcesAccess,true);
+  assert.match(usersPage(state),/Revoke access/);
+  assert.equal(calls[0][0],'animeplex_admin_set_sources_permission');
+  assert.deepEqual(calls[0][1],{p_user_id:'user-1',p_allowed:true});
+  await assert.rejects(
+    setAdminUserSourcesAccess(db,state,'user-2',true),
+    /selected user profile/
+  );
+  await setAdminUserSourcesAccess(db,state,'user-1',false);
+  assert.equal(state.userDetail.sourcesAccess,false);
+});
+test('non-admin cannot grant Sources access',async()=>{
+  const state={member:{role:'release_manager'},userDetail:{user:{id:'user-1'}}};
+  await assert.rejects(setAdminUserSourcesAccess({rpc:async()=>({data:true})},state,'user-1',true),/Owner\/admin/);
 });

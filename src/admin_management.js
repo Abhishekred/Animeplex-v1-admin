@@ -43,13 +43,30 @@ export async function loadAdminUsers(db, state, query = '', offset = 0) {
 export async function openAdminUser(db, state, id) {
   allowed(state.member?.role);
   if (!state.userRows?.some(row=>row.id===id)) throw new Error('Select a listed user.');
-  const [standard, scoped] = await Promise.all([
+  const [standard, scoped, permissions] = await Promise.all([
     db.rpc('animeplex_admin_user_detail', {p_user_id:id}),
     db.rpc('animeplex_admin_user_scoped_detail', {p_user_id:id}),
+    db.from('animeplex_user_permissions')
+      .select('sources_access').eq('user_id', id).maybeSingle(),
   ]);
   if (standard.error) throw standard.error;
   if (scoped.error) throw scoped.error;
-  state.userDetail = {...standard.data, ...scoped.data};
+  if (permissions.error) throw permissions.error;
+  state.userDetail = {
+    ...standard.data, ...scoped.data,
+    sourcesAccess: permissions.data?.sources_access === true,
+  };
+}
+export async function setAdminUserSourcesAccess(db, state, id, enabled) {
+  allowed(state.member?.role);
+  if (!state.userDetail?.user || state.userDetail.user.id !== id) {
+    throw new Error('Open the selected user profile first.');
+  }
+  const {data, error} = await db.rpc('animeplex_admin_set_sources_permission', {
+    p_user_id: id, p_allowed: enabled === true,
+  });
+  if (error) throw error;
+  state.userDetail = {...state.userDetail, sourcesAccess: data === true};
 }
 export async function loadAdminProviders(db, state) {
   allowed(state.member?.role);
@@ -126,6 +143,10 @@ export function usersPage(state) {
     ];
     return '<div class="page-head"><div><div class="eyebrow">Read-only · audited</div><h1 class="heading">'+col(u.display_name||u.email)+'</h1><p class="subtitle">'+col(u.email)+' · Last login '+date(u.last_sign_in_at)+'</p></div>'+
       '<button class="btn btn-ghost" data-action="user-back">Back to users</button></div>'+
+      '<section class="card" style="margin-top:16px"><div class="card-head"><h2>Sources settings permission</h2><span class="pill">'+(d.sourcesAccess ? 'Allowed' : 'Hidden')+'</span></div>'+
+      '<div class="card-body" style="display:flex;gap:16px;align-items:center;justify-content:space-between;flex-wrap:wrap">'+
+      '<p class="subtitle" style="max-width:540px;margin:0">Only this account can see Settings → Sources when enabled. All other users remain blocked.</p>'+
+      '<button type="button" class="btn '+(d.sourcesAccess ? 'btn-ghost' : 'btn-primary')+'" data-action="toggle-sources-access" data-id="'+esc(u.id)+'" aria-pressed="'+(d.sourcesAccess ? 'true':'false')+'">'+(d.sourcesAccess ? 'Revoke access' : 'Grant Sources access')+'</button></div></section>'+
       '<div class="alert">Only synced library metadata is shown, up to 100 recent rows per category. Passwords, session tokens and profile PINs are never accessible here.</div>'+
       sections.map(([title,rows,columns])=>'<section class="card" style="margin-top:20px"><div class="card-head"><h2>'+esc(title)+'</h2><span class="pill">'+count(rows?.length)+'</span></div><div class="card-body">'+tableRows(rows,columns)+'</div></section>').join('');
   }
