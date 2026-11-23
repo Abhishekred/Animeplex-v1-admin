@@ -2,6 +2,10 @@
 import './style.css';
 import './glass.css';
 import './control_manager.css';
+import './admin_management.css';
+import { canManageUsers, usersPage, providersPage, loadAdminUsers, openAdminUser,
+  loadAdminProviders, saveAdminProvider, changeAdminProvider, removeAdminProvider }
+  from './admin_management.js';
 import { PLAYER_CONTROLS, PLAYER_SLOTS, REGION_CODES, REGION_NAMES,
   DEFAULT_PLAYER_LAYOUT, cleanPlayerLayout, hiddenPlayerControls,
   movePlayerControl, reorderPlayerControl } from './control_manager.js';
@@ -26,8 +30,11 @@ const state = {
   playerDraft: null, playerDirty: false, playerAllowCustom: true,
   regionDraft: null, regionDirty: false,
   error: '', loginError: '', mobileOpen: false,
+  userRows: [], userSearch:'', userOffset:0, userCount:0, userDetail:null,
+  managedProviders:[], editProviderId:null,
 };
 const iconShapes = {
+  users: '<circle cx="9" cy="8" r="3"/><path d="M3 20v-2a6 6 0 0 1 12 0v2M17 5a3 3 0 0 1 0 6m1 3a5 5 0 0 1 3 4"/>',
   grid: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
   package: '<rect x="3" y="7" width="18" height="14" rx="2"/><path d="M3 11h18M8 7V4h8v3"/>',
   sliders: '<path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="2"/><circle cx="16" cy="17" r="2"/>',
@@ -134,6 +141,7 @@ function shell() {
         ${nav('Streaming region','region','globe')}
         ${nav('About page','about','globe')}
         ${nav('Update settings','settings','sliders')}
+        ${canManageUsers(state.member?.role) ? nav('Users','users','users') + nav('Provider sources','providers','layers') : ''}
       </div>
       <div class="nav-spacer"></div>
       <div class="side-status"><div class="side-status-title"><i class="online-dot" style="${c.enabled ? '' : 'background:#e8aa5d;box-shadow:0 0 9px #e8aa5d6b'}"></i> ${esc(stateLabel)}</div>
@@ -146,13 +154,13 @@ function shell() {
     </aside>
     <main class="main">
       <div class="topbar"><div class="mobile-top"><button type="button" class="icon-btn" data-action="menu" aria-label="Open menu">${icon('menu',22)}</button></div>
-      <div class="breadcrumb"><span>AnimePlex</span> ${icon('arrow',13)} <strong>${state.page === 'overview' ? 'Overview' : state.page === 'releases' ? 'Releases' : state.page === 'controls' ? 'Player controls' : state.page === 'region' ? 'Streaming region' : state.page === 'about' ? 'About page' : 'Update settings'}</strong></div>
+      <div class="breadcrumb"><span>AnimePlex</span> ${icon('arrow',13)} <strong>${state.page === 'overview' ? 'Overview' : state.page === 'releases' ? 'Releases' : state.page === 'controls' ? 'Player controls' : state.page === 'region' ? 'Streaming region' : state.page === 'about' ? 'About page' : state.page === 'users' ? 'Users' : state.page === 'providers' ? 'Provider sources' : 'Update settings'}</strong></div>
       <div class="bar-actions"><span class="bar-time">${esc(new Date().toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}))}</span>
         <div class="bar-chip">${icon('shield',15)} Secure workspace</div>
       </div></div>
       <div class="content">
         ${state.error ? `<div class="alert warning" style="margin-bottom:22px">${icon('alert',19)} ${esc(state.error)}</div>` : ''}
-        ${state.page === 'overview' ? overview() : state.page === 'releases' ? releasePage() : state.page === 'controls' ? controlsPage() : state.page === 'region' ? regionPage() : state.page === 'about' ? aboutPage() : settingsPage()}
+        ${state.page === 'overview' ? overview() : state.page === 'releases' ? releasePage() : state.page === 'controls' ? controlsPage() : state.page === 'region' ? regionPage() : state.page === 'about' ? aboutPage() : state.page === 'users' ? usersPage(state) : state.page === 'providers' ? providersPage(state) : settingsPage()}
       </div>
     </main></div>`;
 }
@@ -785,6 +793,19 @@ async function login(form) {
 document.addEventListener('submit',async(e)=>{
   if(e.target.id==='login-form'){e.preventDefault();await login(e.target);}
   if(e.target.id==='release-form'){e.preventDefault();await saveDraft(e.target);}
+  if(e.target.id==='admin-user-search'){
+    e.preventDefault();
+    try { await loadAdminUsers(supabase,state,new FormData(e.target).get('query')||'',0); render(); }
+    catch(error){toast(errorMessage(error),true);}
+  }
+  if(e.target.id==='admin-provider-form'){
+    e.preventDefault();
+    const f = new FormData(e.target);
+    const data = Object.fromEntries(f);
+    data.enabled=f.has('enabled'); data.auto_install=f.has('auto_install'); data.is_default=f.has('is_default');
+    try { await saveAdminProvider(supabase,state,data,state.editProviderId); toast('Provider configuration saved.'); render(); }
+    catch(error){toast(errorMessage(error),true);}
+  }
   if(e.target.id==='repo-form'){
     e.preventDefault();
     const url=String(new FormData(e.target).get('repository_url')||'').trim();
@@ -847,12 +868,50 @@ document.addEventListener('change',async(e)=>{
 });
 document.addEventListener('click',async(e)=>{
   const page=e.target.closest('[data-page]')?.dataset.page;
-  if(page&&['overview','releases','settings','controls','region','about'].includes(page)){
-    state.page=page;state.mobileOpen=false;state.error='';render();window.scrollTo(0,0);return;
+  if(page&&['overview','releases','settings','controls','region','about','users','providers'].includes(page)){
+    if (['users','providers'].includes(page) && !canManageUsers(state.member?.role)) {
+      toast('Owner/admin permission required.',true);return;
+    }
+    state.page=page;state.mobileOpen=false;state.error='';render();window.scrollTo(0,0);
+    try {
+      if(page==='users') await loadAdminUsers(supabase,state,state.userSearch,state.userOffset);
+      if(page==='providers') await loadAdminProviders(supabase,state);
+      render();
+    } catch(error){state.error=errorMessage(error);render();}
+    return;
   }
   const btn=e.target.closest('[data-action]');
   if(!btn)return;
   const action=btn.dataset.action;
+  if(['view-user','user-back','user-prev','user-next','refresh-users'].includes(action)){
+    try {
+      if(action==='view-user') await openAdminUser(supabase,state,btn.dataset.id);
+      if(action==='user-back')state.userDetail=null;
+      if(action==='user-prev')await loadAdminUsers(supabase,state,state.userSearch,Math.max(0,state.userOffset-25));
+      if(action==='user-next')await loadAdminUsers(supabase,state,state.userSearch,state.userOffset+25);
+      if(action==='refresh-users')await loadAdminUsers(supabase,state,state.userSearch,state.userOffset);
+      render();
+    } catch(error){toast(errorMessage(error),true);}
+    return;
+  }
+  if(['edit-provider','cancel-provider-edit','toggle-provider','default-provider','remove-provider'].includes(action)){
+    try {
+      if(action==='cancel-provider-edit')state.editProviderId=null;
+      else if(action==='edit-provider')state.editProviderId=btn.dataset.id;
+      else {
+        const row=state.managedProviders.find(p=>p.id===btn.dataset.id);
+        if(!row)throw new Error('Provider no longer exists.');
+        if(action==='toggle-provider')await changeAdminProvider(supabase,state,row.id,{enabled:!row.enabled});
+        if(action==='default-provider')await changeAdminProvider(supabase,state,row.id,{is_default:true,enabled:true});
+        if(action==='remove-provider'){
+          if(!window.confirm('Remove '+row.label+' from remote-managed providers?'))return;
+          await removeAdminProvider(supabase,state,row.id);
+        }
+      }
+      render();
+    } catch(error){toast(errorMessage(error),true);}
+    return;
+  }
   if(action==='menu'){state.mobileOpen=true;render();}
   if(action==='close-menu'){state.mobileOpen=false;render();}
   if(action==='control-up'||action==='control-down'){
@@ -882,7 +941,7 @@ document.addEventListener('click',async(e)=>{
   if(action==='delete')await deleteDraft();
   if(action==='logout'){
     await supabase.auth.signOut();
-    state.user=null;state.member=null;state.releases=[];state.page='overview';state.loginError='';render();
+    state.user=null;state.member=null;state.releases=[];state.userRows=[];state.userDetail=null;state.managedProviders=[];state.page='overview';state.loginError='';render();
   }
 });
 // HTML5 drag-and-drop supports both placement and reordering between lanes.

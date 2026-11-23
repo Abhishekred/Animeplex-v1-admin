@@ -1,0 +1,11 @@
+
+.admin-data-table { width:100%; overflow-x:auto; border-top:1px solid rgba(255,255,255,.08) }
+.admin-data-table table { width:100%; min-width:650px; border-collapse:collapse; text-align:left; font-size:13px }
+.admin-data-table th { text-transform:uppercase; letter-spacing:.05em; font-size:11px; color:var(--muted,#999); padding:12px 14px; white-space:nowrap }
+.admin-data-table td { padding:13px 14px; border-top:1px solid rgba(255,255,255,.065); vertical-align:middle }
+.admin-data-table td small { margin-top:5px; color:#94949d }
+.admin-data-table tbody tr:hover { background:rgba(255,255,255,.025) }
+#admin-provider-form .label { margin-bottom:-9px }
+#admin-provider-form label:not(.label) { display:flex; align-items:center; gap:10px; color:var(--text,#eee); font-size:13px }
+#admin-provider-form input[type=checkbox] { width:17px;height:17px;accent-color:#ff4b64 }
+@media(max-width:800px) { .admin-data-table table { min-width:760px } }
