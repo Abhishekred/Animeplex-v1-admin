@@ -88,7 +88,7 @@ test('users list and details offer edit/delete while keeping sources control',()
   const details=usersPage({...base,userDetail:{user:row,sourcesAccess:false}});
   assert.match(details,/id="admin-user-edit"/);
   assert.match(details,/data-action="toggle-sources-access"/);
-  assert.match(details,/Type the exact email/);
+  assert.match(details,/typing the exact email/i);
 });
 
 test('edit saves only selected account through protected edge function',async()=>{
