@@ -1,6 +1,15 @@
 import { escapeHtml as esc, shortDate } from './utils.js';
 
 export const canManageUsers = (role) => role === 'owner' || role === 'admin';
+export function validateUserEdit(values) {
+  const display_name = String(values.display_name ?? '').trim();
+  const email = String(values.email ?? '').trim().toLowerCase();
+  if (!display_name || display_name.length > 80)
+    return {error:'Display name must be 1–80 characters.'};
+  if (email.length > 254 || !/^[^ @]+@[^ @]+[.][^ @]+$/.test(email))
+    return {error:'Enter a valid email address.'};
+  return {data:{display_name,email}};
+}
 const allowed = (role) => {
   if (!canManageUsers(role)) throw new Error('Owner/admin permission required.');
 };
@@ -67,6 +76,45 @@ export async function setAdminUserSourcesAccess(db, state, id, enabled) {
   });
   if (error) throw error;
   state.userDetail = {...state.userDetail, sourcesAccess: data === true};
+}
+async function accountRequest(db, body) {
+  const {data,error} = await db.functions.invoke('admin-users',{body});
+  if (error) {
+    let detail='';
+    try { detail=(await error.context?.json?.())?.error || ''; } catch (_) { /* network failure */ }
+    throw new Error(detail || error.message || 'Account request failed.');
+  }
+  if (data?.ok !== true) throw new Error(data?.error || 'Account request failed.');
+  return data;
+}
+export async function updateAdminUser(db, state, id, values) {
+  allowed(state.member?.role);
+  if (!state.userDetail?.user || state.userDetail.user.id !== id)
+    throw new Error('Open the selected user profile first.');
+  const validated=validateUserEdit(values);
+  if (validated.error) throw new Error(validated.error);
+  const data=await accountRequest(db,{
+    action:'update',userId:id,
+    displayName:validated.data.display_name,email:validated.data.email,
+  });
+  state.userDetail={...state.userDetail,user:{
+    ...state.userDetail.user,...data.user,
+  }};
+  state.userRows=(state.userRows || []).map(u=>u.id===id?{...u,...data.user}:u);
+}
+export async function deleteAdminUser(db, state, id, confirmEmail) {
+  allowed(state.member?.role);
+  const target=state.userDetail?.user;
+  if (!target || target.id!==id) throw new Error('Open the selected user profile first.');
+  if (String(confirmEmail || '').trim().toLowerCase()!==String(target.email || '').toLowerCase())
+    throw new Error('Confirmation email does not match.');
+  await accountRequest(db,{
+    action:'delete', userId:id, confirmEmail:String(confirmEmail).trim().toLowerCase(),
+  });
+  await loadAdminUsers(db,state,state.userSearch,state.userOffset);
+  if (state.userOffset>=state.userCount && state.userOffset>0) {
+    await loadAdminUsers(db,state,state.userSearch,Math.max(0,state.userOffset-25));
+  }
 }
 export async function loadAdminProviders(db, state) {
   allowed(state.member?.role);
@@ -141,8 +189,18 @@ export function usersPage(state) {
       ['List category names',d.list_categories,[['name','Category'],['position','Order'],['created_at','Created']]],
       ['Profile category names',d.profile_list_categories,[['profile_id','Profile'],['name','Category'],['position','Order']]],
     ];
-    return '<div class="page-head"><div><div class="eyebrow">Read-only · audited</div><h1 class="heading">'+col(u.display_name||u.email)+'</h1><p class="subtitle">'+col(u.email)+' · Last login '+date(u.last_sign_in_at)+'</p></div>'+
+    return '<div class="page-head"><div><div class="eyebrow">Account management · audited</div><h1 class="heading">'+col(u.display_name||u.email)+'</h1><p class="subtitle">'+col(u.email)+' · Last login '+date(u.last_sign_in_at)+'</p></div>'+
       '<button class="btn btn-ghost" data-action="user-back">Back to users</button></div>'+
+      '<section class="card" style="margin-top:16px"><div class="card-head"><h2>Edit account</h2></div>'+
+      '<form id="admin-user-edit" class="card-body stack" data-id="'+esc(u.id)+'">'+
+      '<label class="label" for="edit-user-name">Display name</label>'+
+      '<input class="field" id="edit-user-name" name="display_name" maxlength="80" required value="'+esc(u.display_name || '')+'" autocomplete="off">'+
+      '<label class="label" for="edit-user-email">Email address</label>'+
+      '<input class="field" id="edit-user-email" name="email" type="email" maxlength="254" required value="'+esc(u.email)+'" autocomplete="off">'+
+      '<div><button type="submit" class="btn btn-primary">Save user changes</button></div></form></section>'+
+      '<section class="card" style="margin-top:16px"><div class="card-head"><h2>Delete account</h2><span class="pill">Danger zone</span></div>'+
+      '<div class="card-body"><p class="subtitle" style="margin:0 0 14px">Permanently removes the account and its synced app data. Owner/admin accounts are protected. Requires typing the exact email before deletion.</p>'+
+      '<button type="button" class="btn btn-ghost user-delete-btn" data-action="delete-user" data-id="'+esc(u.id)+'">Delete this user</button></div></section>'+
       '<section class="card" style="margin-top:16px"><div class="card-head"><h2>Sources settings permission</h2><span class="pill">'+(d.sourcesAccess ? 'Allowed' : 'Hidden')+'</span></div>'+
       '<div class="card-body" style="display:flex;gap:16px;align-items:center;justify-content:space-between;flex-wrap:wrap">'+
       '<p class="subtitle" style="max-width:540px;margin:0">Only this account can see Settings → Sources when enabled. All other users remain blocked.</p>'+
@@ -158,7 +216,9 @@ export function usersPage(state) {
       '<button class="btn btn-primary" type="submit">Search</button>'+
       '<button type="button" class="btn btn-ghost" data-action="refresh-users">Refresh</button></form>'+
       '<div class="admin-data-table"><table><thead><tr><th>User</th><th>Registered</th><th>Last login</th><th>My List</th><th>Watched</th><th>Read</th><th>Profiles</th><th></th></tr></thead><tbody>'+
-      rows.map(u=>'<tr><td><strong>'+col(u.display_name||u.email)+'</strong><small style="display:block">'+col(u.email)+'</small></td><td>'+date(u.created_at)+'</td><td>'+date(u.last_sign_in_at)+'</td><td>'+count(u.mylist_count)+'</td><td>'+count(u.watch_count)+'</td><td>'+count(u.reading_count)+'</td><td>'+count(u.profile_count)+'</td><td><button class="btn btn-ghost btn-sm" data-action="view-user" data-id="'+esc(u.id)+'">View</button></td></tr>').join('')+
+      rows.map(u=>'<tr><td><strong>'+col(u.display_name||u.email)+'</strong><small style="display:block">'+col(u.email)+'</small></td><td>'+date(u.created_at)+'</td><td>'+date(u.last_sign_in_at)+'</td><td>'+count(u.mylist_count)+'</td><td>'+count(u.watch_count)+'</td><td>'+count(u.reading_count)+'</td><td>'+count(u.profile_count)+'</td><td><div class="user-actions"><button class="btn btn-ghost btn-sm" data-action="view-user" data-id="'+esc(u.id)+'">View</button>'+
+      '<button class="btn btn-ghost btn-sm" data-action="edit-user" data-id="'+esc(u.id)+'">Edit</button>'+
+      '<button class="btn btn-ghost btn-sm user-delete-btn" data-action="delete-user" data-id="'+esc(u.id)+'">Delete</button></div></td></tr>').join('')+
       '</tbody></table></div><div class="card-body" style="display:flex;justify-content:space-between;align-items:center"><span>'+count(Math.min(offset+1,total))+'–'+count(Math.min(offset+rows.length,total))+' of '+count(total)+'</span><div style="display:flex;gap:8px">'+
       '<button class="btn btn-ghost btn-sm" data-action="user-prev" '+(offset===0?'disabled':'')+'>Previous</button><button class="btn btn-ghost btn-sm" data-action="user-next" '+(offset+rows.length>=total?'disabled':'')+'>Next</button></div></div></section>';
 }
