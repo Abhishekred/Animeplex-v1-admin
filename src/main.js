@@ -5,7 +5,7 @@ import './control_manager.css';
 import './admin_management.css';
 import { canManageUsers, usersPage, providersPage, loadAdminUsers, openAdminUser,
   loadAdminProviders, saveAdminProvider, changeAdminProvider, removeAdminProvider,
-  setAdminUserSourcesAccess }
+  setAdminUserSourcesAccess, updateAdminUser, deleteAdminUser }
   from './admin_management.js';
 import { PLAYER_CONTROLS, PLAYER_SLOTS, REGION_CODES, REGION_NAMES,
   DEFAULT_PLAYER_LAYOUT, cleanPlayerLayout, hiddenPlayerControls,
@@ -799,6 +799,16 @@ document.addEventListener('submit',async(e)=>{
     try { await loadAdminUsers(supabase,state,new FormData(e.target).get('query')||'',0); render(); }
     catch(error){toast(errorMessage(error),true);}
   }
+  if(e.target.id==='admin-user-edit'){
+    e.preventDefault();
+    try {
+      const id=e.target.dataset.id;
+      await updateAdminUser(supabase,state,id,Object.fromEntries(new FormData(e.target)));
+      toast('User details saved.');
+      render();
+    } catch(error){toast(errorMessage(error),true);}
+    return;
+  }
   if(e.target.id==='admin-provider-form'){
     e.preventDefault();
     const f = new FormData(e.target);
@@ -884,13 +894,32 @@ document.addEventListener('click',async(e)=>{
   const btn=e.target.closest('[data-action]');
   if(!btn)return;
   const action=btn.dataset.action;
-  if(['view-user','user-back','user-prev','user-next','refresh-users'].includes(action)){
+  if(['view-user','edit-user','user-back','user-prev','user-next','refresh-users'].includes(action)){
     try {
-      if(action==='view-user') await openAdminUser(supabase,state,btn.dataset.id);
+      if(action==='view-user'||action==='edit-user') await openAdminUser(supabase,state,btn.dataset.id);
       if(action==='user-back')state.userDetail=null;
       if(action==='user-prev')await loadAdminUsers(supabase,state,state.userSearch,Math.max(0,state.userOffset-25));
       if(action==='user-next')await loadAdminUsers(supabase,state,state.userSearch,state.userOffset+25);
       if(action==='refresh-users')await loadAdminUsers(supabase,state,state.userSearch,state.userOffset);
+      render();
+      if(action==='edit-user') document.getElementById('edit-user-name')?.focus();
+    } catch(error){toast(errorMessage(error),true);}
+    return;
+  }
+  if(action==='delete-user'){
+    try {
+      const id=btn.dataset.id;
+      const user=(state.userDetail?.user?.id===id ? state.userDetail.user : state.userRows.find(u=>u.id===id));
+      if(!user)throw new Error('Account not found in current user list.');
+      const typed=window.prompt('Permanently delete '+user.email+' and its synced data? Type the exact account email:');
+      if(typed===null)return;
+      if(typed.trim().toLowerCase()!==String(user.email).toLowerCase()){
+        toast('Email confirmation did not match. Nothing deleted.',true);return;
+      }
+      if(!window.confirm('FINAL CONFIRMATION: Delete '+user.email+' permanently? This cannot be undone.'))return;
+      if(state.userDetail?.user?.id!==id)await openAdminUser(supabase,state,id);
+      await deleteAdminUser(supabase,state,id,typed);
+      toast('User account deleted from AnimePlex.');
       render();
     } catch(error){toast(errorMessage(error),true);}
     return;
