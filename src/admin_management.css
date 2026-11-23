@@ -9,3 +9,9 @@
 #admin-provider-form label:not(.label) { display:flex; align-items:center; gap:10px; color:var(--text,#eee); font-size:13px }
 #admin-provider-form input[type=checkbox] { width:17px;height:17px;accent-color:#ff4b64 }
 @media(max-width:800px) { .admin-data-table table { min-width:760px } }
+
+.user-actions {display:flex;gap:6px;align-items:center;flex-wrap:nowrap}
+.user-delete-btn {color:#ff8997!important;border-color:rgba(255,91,112,.32)!important}
+.user-delete-btn:hover {background:rgba(255,91,112,.12)!important}
+#admin-user-edit .label {margin-bottom:-9px}
+@media(max-width:800px){.user-actions{flex-wrap:wrap;min-width:160px}}
