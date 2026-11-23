@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { validateManagedProvider, canManageUsers, usersPage, providersPage,
-  setAdminUserSourcesAccess } from '../src/admin_management.js';
+  setAdminUserSourcesAccess, validateUserEdit, updateAdminUser, deleteAdminUser }
+  from '../src/admin_management.js';
 
 const input = {
   label: 'MovieBox', repo_url: 'https://raw.githubusercontent.com/Abhishekred/Stream-1/test/repo.json',
@@ -69,4 +70,70 @@ test('admin can grant and revoke per-user Sources access; never other accounts',
 test('non-admin cannot grant Sources access',async()=>{
   const state={member:{role:'release_manager'},userDetail:{user:{id:'user-1'}}};
   await assert.rejects(setAdminUserSourcesAccess({rpc:async()=>({data:true})},state,'user-1',true),/Owner\/admin/);
+});
+
+test('user edit validates display names and emails',()=>{
+  assert.deepEqual(validateUserEdit({display_name:' Test Person ',email:'TEST@example.com'}).data,
+    {display_name:'Test Person',email:'test@example.com'});
+  assert.match(validateUserEdit({display_name:'',email:'test@example.com'}).error,/Display name/);
+  assert.match(validateUserEdit({display_name:'Okay',email:'not-an-email'}).error,/email/);
+});
+
+test('users list and details offer edit/delete while keeping sources control',()=>{
+  const row={id:'u1',display_name:'Test',email:'test@example.com'};
+  const base={member:{role:'owner'},userRows:[row],userCount:1,userOffset:0};
+  const list=usersPage(base);
+  assert.match(list,/data-action="edit-user"/);
+  assert.match(list,/data-action="delete-user"/);
+  const details=usersPage({...base,userDetail:{user:row,sourcesAccess:false}});
+  assert.match(details,/id="admin-user-edit"/);
+  assert.match(details,/data-action="toggle-sources-access"/);
+  assert.match(details,/Type the exact email/);
+});
+
+test('edit saves only selected account through protected edge function',async()=>{
+  const row={id:'u1',display_name:'Old',email:'old@example.com'};
+  const state={member:{role:'admin'},userDetail:{user:row,sourcesAccess:false},
+    userRows:[row]};
+  const calls=[];
+  const db={functions:{invoke:async(slug,payload)=>{
+    calls.push([slug,payload]);
+    return {data:{ok:true,user:{id:'u1',display_name:'New',email:'new@example.com'}},error:null};
+  }}};
+  await updateAdminUser(db,state,'u1',{display_name:'New',email:'NEW@example.com'});
+  assert.equal(calls[0][0],'admin-users');
+  assert.deepEqual(calls[0][1].body,{action:'update',userId:'u1',
+    displayName:'New',email:'new@example.com'});
+  assert.equal(state.userDetail.user.display_name,'New');
+  assert.equal(state.userRows[0].email,'new@example.com');
+  await assert.rejects(updateAdminUser(db,state,'other',{display_name:'X',
+    email:'x@example.com'}),/selected user profile/);
+});
+
+test('delete requires matching email and refreshes account list',async()=>{
+  const row={id:'u1',email:'test@example.com'};
+  const state={member:{role:'owner'},userDetail:{user:row},userRows:[row],
+    userSearch:'',userOffset:0,userCount:1};
+  const calls=[];
+  const db={
+    functions:{invoke:async(slug,request)=>{
+      calls.push([slug,request.body]);
+      return {data:{ok:true,deletedId:'u1'},error:null};
+    }},
+    rpc:async()=>({data:{users:[],total:0,offset:0},error:null}),
+  };
+  await assert.rejects(deleteAdminUser(db,state,'u1','wrong@example.com'),/does not match/);
+  assert.equal(calls.length,0);
+  await deleteAdminUser(db,state,'u1','test@example.com');
+  assert.equal(calls[0][1].action,'delete');
+  assert.equal(calls[0][1].confirmEmail,'test@example.com');
+  assert.equal(state.userDetail,null);
+  assert.equal(state.userCount,0);
+});
+
+test('non-admin cannot edit or delete users',async()=>{
+  const state={member:{role:'release_manager'},userDetail:{user:{id:'u1',email:'a@b.com'}}};
+  const db={functions:{invoke:()=>{throw Error('should not invoke');}}};
+  await assert.rejects(updateAdminUser(db,state,'u1',{display_name:'X',email:'a@b.com'}),/Owner\/admin/);
+  await assert.rejects(deleteAdminUser(db,state,'u1','a@b.com'),/Owner\/admin/);
 });
