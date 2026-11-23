@@ -43,9 +43,13 @@ export async function loadAdminUsers(db, state, query = '', offset = 0) {
 export async function openAdminUser(db, state, id) {
   allowed(state.member?.role);
   if (!state.userRows?.some(row=>row.id===id)) throw new Error('Select a listed user.');
-  const {data,error} = await db.rpc('animeplex_admin_user_detail', {p_user_id:id});
-  if (error) throw error;
-  state.userDetail = data;
+  const [standard, scoped] = await Promise.all([
+    db.rpc('animeplex_admin_user_detail', {p_user_id:id}),
+    db.rpc('animeplex_admin_user_scoped_detail', {p_user_id:id}),
+  ]);
+  if (standard.error) throw standard.error;
+  if (scoped.error) throw scoped.error;
+  state.userDetail = {...standard.data, ...scoped.data};
 }
 export async function loadAdminProviders(db, state) {
   allowed(state.member?.role);
@@ -114,6 +118,11 @@ export function usersPage(state) {
       ['Reading history',d.reading_history,[['title','Title'],['chapter_number','Chapter'],['pos','Progress']]],
       ['Viewer profiles',d.viewer_profiles,[['name','Name'],['is_kids','Kids'],['created_at','Created']]],
       ['My List categories',d.categories,[['source_id','Source'],['item_id','Item'],['category_id','Category']]],
+      ['Profile My List',d.profile_mylist,[['profile_id','Profile'],['title','Title'],['type','Type'],['status','Status']]],
+      ['Profile watch history',d.profile_watch_history,[['profile_id','Profile'],['show_title','Title'],['episode_number','Episode'],['position_ms','Position (ms)']]],
+      ['Profile reading history',d.profile_reading_history,[['profile_id','Profile'],['title','Title'],['chapter_number','Chapter'],['pos','Progress']]],
+      ['List category names',d.list_categories,[['name','Category'],['position','Order'],['created_at','Created']]],
+      ['Profile category names',d.profile_list_categories,[['profile_id','Profile'],['name','Category'],['position','Order']]],
     ];
     return '<div class="page-head"><div><div class="eyebrow">Read-only · audited</div><h1 class="heading">'+col(u.display_name||u.email)+'</h1><p class="subtitle">'+col(u.email)+' · Last login '+date(u.last_sign_in_at)+'</p></div>'+
       '<button class="btn btn-ghost" data-action="user-back">Back to users</button></div>'+
