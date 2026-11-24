@@ -143,10 +143,12 @@ async function discover(kind:string,url:string):Promise<{name:string,items:Entry
         if(!rows.length)continue;
         for(const x of rows){
           if(!x||typeof x!=="object")continue;
-          const id=x.id??x.sourceId??x.sourceCodeUrl??x.name;
-          // The engine identifies source IDs, not URLs; ignore unsafe or unidentifiable entries.
-          const value=one(id,x.name||x.sourceName,
-            x.type||x.sourceType||(target.includes("novel")?"novel":"manga"),
+          const id=Number.isSafeInteger(x.id) && Number.isInteger(x.itemType) &&
+            Number.isInteger(x.sourceCodeLanguage)
+            ? x.itemType+":"+x.sourceCodeLanguage+":"+x.id : null;
+          // Match MangayomiSource.key's type/code-language/numeric-ID suffix.
+          const type=["manga","anime","novel"][x.itemType]||"";
+          const value=one(id,x.name||x.sourceName,type,
             x.lang||x.language,x.version,x.description);
           if(value)entries.push(value);
         }
