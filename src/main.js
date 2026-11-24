@@ -5,7 +5,8 @@ import './control_manager.css';
 import './admin_management.css';
 import { canManageUsers, usersPage, providersPage, loadAdminUsers, openAdminUser,
   loadAdminProviders, saveAdminProvider, changeAdminProvider, removeAdminProvider,
-  setAdminUserSourcesAccess, updateAdminUser, deleteAdminUser }
+  setAdminUserSourcesAccess, updateAdminUser, deleteAdminUser,
+  setAdminUserProvider, setAdminUserBan }
   from './admin_management.js';
 import { multiProvidersPage, loadProviderRepositories, addProviderRepository, openProviderCatalogue,
   saveProviderSelection, removeProviderRepository, visibleProviderSources, PROVIDER_TYPES } from './provider_management.js';
@@ -803,6 +804,32 @@ document.addEventListener('submit',async(e)=>{
     try { await loadAdminUsers(supabase,state,new FormData(e.target).get('query')||'',0); render(); }
     catch(error){toast(errorMessage(error),true);}
   }
+  if(e.target.id==='admin-user-provider'){
+    e.preventDefault();
+    try{
+      const form=new FormData(e.target);
+      const id=e.target.dataset.id;
+      const sourceId=String(form.get('source_id')||'');
+      await setAdminUserProvider(supabase,state,id,{
+        sourceId,locked:form.has('provider_locked'),
+      });
+      toast('Provider control saved for this account.');
+      render();
+    }catch(error){toast(errorMessage(error),true);}
+    return;
+  }
+  if(e.target.id==='admin-user-ban'){
+    e.preventDefault();
+    try{
+      const id=e.target.dataset.id;
+      const reason=String(new FormData(e.target).get('reason')||'').trim();
+      if(!window.confirm('Ban this account? The user will be blocked from signing in.'))return;
+      await setAdminUserBan(supabase,state,id,true,reason);
+      toast('User account banned.');
+      render();
+    }catch(error){toast(errorMessage(error),true);}
+    return;
+  }
   if(e.target.id==='admin-user-edit'){
     e.preventDefault();
     try {
@@ -940,6 +967,16 @@ document.addEventListener('click',async(e)=>{
       render();
       if(action==='edit-user') document.getElementById('edit-user-name')?.focus();
     } catch(error){toast(errorMessage(error),true);}
+    return;
+  }
+  if(action==='unban-user'){
+    try{
+      const id=btn.dataset.id;
+      if(!window.confirm('Unban this account and allow sign-in again?'))return;
+      await setAdminUserBan(supabase,state,id,false);
+      toast('User account unbanned.');
+      render();
+    }catch(error){toast(errorMessage(error),true);}
     return;
   }
   if(action==='delete-user'){
