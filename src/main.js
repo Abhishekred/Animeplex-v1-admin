@@ -7,6 +7,8 @@ import { canManageUsers, usersPage, providersPage, loadAdminUsers, openAdminUser
   loadAdminProviders, saveAdminProvider, changeAdminProvider, removeAdminProvider,
   setAdminUserSourcesAccess, updateAdminUser, deleteAdminUser }
   from './admin_management.js';
+import { multiProvidersPage, loadProviderRepositories, addProviderRepository, openProviderCatalogue,
+  saveProviderSelection, removeProviderRepository, visibleProviderSources, PROVIDER_TYPES } from './provider_management.js';
 import { PLAYER_CONTROLS, PLAYER_SLOTS, REGION_CODES, REGION_NAMES,
   DEFAULT_PLAYER_LAYOUT, cleanPlayerLayout, hiddenPlayerControls,
   movePlayerControl, reorderPlayerControl } from './control_manager.js';
@@ -32,7 +34,9 @@ const state = {
   regionDraft: null, regionDirty: false,
   error: '', loginError: '', mobileOpen: false,
   userRows: [], userSearch:'', userOffset:0, userCount:0, userDetail:null,
-  managedProviders:[], editProviderId:null,
+  managedProviders:[], editProviderId:null, providerRepositories:[],
+  activeProviderRepoId:null, providerCatalog:[], providerSelection:new Set(),
+  providerCatalogQuery:'', providerCatalogPage:0, providerDraftKind:'cloudstream',
 };
 const iconShapes = {
   users: '<circle cx="9" cy="8" r="3"/><path d="M3 20v-2a6 6 0 0 1 12 0v2M17 5a3 3 0 0 1 0 6m1 3a5 5 0 0 1 3 4"/>',
@@ -161,7 +165,7 @@ function shell() {
       </div></div>
       <div class="content">
         ${state.error ? `<div class="alert warning" style="margin-bottom:22px">${icon('alert',19)} ${esc(state.error)}</div>` : ''}
-        ${state.page === 'overview' ? overview() : state.page === 'releases' ? releasePage() : state.page === 'controls' ? controlsPage() : state.page === 'region' ? regionPage() : state.page === 'about' ? aboutPage() : state.page === 'users' ? usersPage(state) : state.page === 'providers' ? providersPage(state) : settingsPage()}
+        ${state.page === 'overview' ? overview() : state.page === 'releases' ? releasePage() : state.page === 'controls' ? controlsPage() : state.page === 'region' ? regionPage() : state.page === 'about' ? aboutPage() : state.page === 'users' ? usersPage(state) : state.page === 'providers' ? multiProvidersPage(state) : settingsPage()}
       </div>
     </main></div>`;
 }
@@ -809,6 +813,24 @@ document.addEventListener('submit',async(e)=>{
     } catch(error){toast(errorMessage(error),true);}
     return;
   }
+  if(e.target.id==='admin-repository-form'){
+    e.preventDefault();
+    try{
+      const form=Object.fromEntries(new FormData(e.target));
+      state.providerDraftKind=String(form.kind||'cloudstream');
+      const total=await addProviderRepository(supabase,state,form);
+      toast(total+' available sources found. Select the ones to install.');
+      render();
+    }catch(error){toast(errorMessage(error),true);}
+    return;
+  }
+  if(e.target.id==='provider-catalog-filter'){
+    e.preventDefault();
+    state.providerCatalogQuery=String(new FormData(e.target).get('query')||'');
+    state.providerCatalogPage=0;
+    render();
+    return;
+  }
   if(e.target.id==='admin-provider-form'){
     e.preventDefault();
     const f = new FormData(e.target);
@@ -842,6 +864,20 @@ document.addEventListener('input',(e)=>{
   if(instagramPreview)instagramPreview.textContent='@'+(normalizeInstagramHandle(rawHandle) || String(rawHandle).trim().replace(/^@/,''));
 });
 document.addEventListener('change',async(e)=>{
+  if(e.target?.id==='provider-kind'){
+    state.providerDraftKind=e.target.value;
+    const hint=document.getElementById('provider-format-hint');
+    if(hint)hint.textContent=PROVIDER_TYPES.find(x=>x[0]===e.target.value)?.[2]||'';
+    return;
+  }
+  if(e.target?.matches?.('[data-provider-source-id]')){
+    const id=e.target.dataset.providerSourceId;
+    if(e.target.checked)state.providerSelection.add(id);
+    else state.providerSelection.delete(id);
+    const counter=document.getElementById('provider-selected-count');
+    if(counter)counter.textContent=state.providerSelection.size.toLocaleString('en-IN');
+    return;
+  }
   if (e.target?.name === 'delivery_method') {
     const method=e.target.value;
     document.querySelectorAll('[data-apk-source]').forEach(section=>{
@@ -886,7 +922,7 @@ document.addEventListener('click',async(e)=>{
     state.page=page;state.mobileOpen=false;state.error='';render();window.scrollTo(0,0);
     try {
       if(page==='users') await loadAdminUsers(supabase,state,state.userSearch,state.userOffset);
-      if(page==='providers') await loadAdminProviders(supabase,state);
+      if(page==='providers') await loadProviderRepositories(supabase,state);
       render();
     } catch(error){state.error=errorMessage(error);render();}
     return;
@@ -933,6 +969,38 @@ document.addEventListener('click',async(e)=>{
       toast(newValue ? 'Sources access granted to this user.' : 'Sources access revoked.');
       render();
     } catch(error){toast(errorMessage(error),true);}
+    return;
+  }
+  if(['provider-manage-repo','provider-remove-repo','provider-save-selection',
+      'provider-close-catalogue','provider-page-prev','provider-page-next',
+      'provider-select-visible','provider-clear-visible'].includes(action)){
+    try{
+      if(action==='provider-manage-repo'){
+        const n=await openProviderCatalogue(supabase,state,btn.dataset.id);
+        toast(n+' available extensions found.');
+      }else if(action==='provider-remove-repo'){
+        const repo=state.providerRepositories.find(x=>x.id===btn.dataset.id);
+        if(!repo)throw new Error('Repository no longer exists.');
+        if(!window.confirm('Remove '+repo.label+' and its selected source configurations? Existing Android installs will not be uninstalled.'))return;
+        await removeProviderRepository(supabase,state,repo.id);
+        toast('Repository removed from admin registry.');
+      }else if(action==='provider-save-selection'){
+        const n=await saveProviderSelection(supabase,state);
+        toast(n+' sources selected for remote installation.');
+      }else if(action==='provider-close-catalogue'){
+        state.activeProviderRepoId=null;state.providerCatalog=[];state.providerSelection=new Set();
+      }else if(action==='provider-page-prev'){
+        state.providerCatalogPage=Math.max(0,state.providerCatalogPage-1);
+      }else if(action==='provider-page-next'){
+        state.providerCatalogPage++;
+      }else{
+        for(const source of visibleProviderSources(state)){
+          if(action==='provider-select-visible')state.providerSelection.add(source.id);
+          else state.providerSelection.delete(source.id);
+        }
+      }
+      render();
+    }catch(error){toast(errorMessage(error),true);}
     return;
   }
   if(['edit-provider','cancel-provider-edit','toggle-provider','default-provider','remove-provider'].includes(action)){
