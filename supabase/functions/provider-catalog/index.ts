@@ -130,8 +130,11 @@ async function discover(kind:string,url:string):Promise<{name:string,items:Entry
       one(x?.id,x?.name,x?.type,x?.lang,x?.version)))};
   }
   if(kind==="mangayomi"){
-    const start=base.replace(/\/(?:index\.json|novel_index\.json)\/?$/,"");
-    const targets=base.endsWith(".json")?[base]:[start+"/index.json",start+"/novel_index.json"];
+    const start=base.replace(/\/(?:anime_index\.json|manga_index\.json|index\.json|novel_index\.json)\/?$/,"");
+    const targets=base.endsWith(".json")?[base]:[
+      start+"/anime_index.json",start+"/manga_index.json",
+      start+"/index.json",start+"/novel_index.json"
+    ];
     const entries:Entry[]=[];let errorMessage="";
     for(const target of targets){
       try{
