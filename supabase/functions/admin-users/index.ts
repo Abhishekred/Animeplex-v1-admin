@@ -104,8 +104,12 @@ Deno.serve(async (req: Request) => {
         provider_locked:locked,
         updated_at:new Date().toISOString(),
       };
-      const { data: row, error: saveError } = await db.from("animeplex_user_runtime_controls")
-        .upsert(payload,{onConflict:"user_id"})
+      // Update only the provider fields. Upsert can reset omitted ban columns
+      // to defaults, so never use an unrestricted merge here.
+      const providerWrite = existing
+        ? db.from("animeplex_user_runtime_controls").update(payload).eq("user_id",id)
+        : db.from("animeplex_user_runtime_controls").insert(payload);
+      const { data: row, error: saveError } = await providerWrite
         .select("current_provider_id,forced_provider_id,provider_locked,is_banned,ban_reason,available_providers,last_seen_at").single();
       if (saveError) return json({ error: saveError.message }, 500);
       const {error:logError}=await db.from("admin_audit_logs").insert({
@@ -132,12 +136,16 @@ Deno.serve(async (req: Request) => {
         ban_duration:banned?"876000h":"none",
       });
       if(authBanError)return json({error:authBanError.message},409);
-      const {data:row,error:saveError}=await db.from("animeplex_user_runtime_controls")
-        .upsert({
-          user_id:id,is_banned:banned,ban_reason:banned?reason:null,
-          banned_at:banned?new Date().toISOString():null,
-          updated_at:new Date().toISOString(),
-        },{onConflict:"user_id"})
+      const banFields={
+        is_banned:banned,ban_reason:banned?reason:null,
+        banned_at:banned?new Date().toISOString():null,
+        updated_at:new Date().toISOString(),
+      };
+      // Preserve the user's current and locked provider when changing ban state.
+      const banWrite = previous
+        ? db.from("animeplex_user_runtime_controls").update(banFields).eq("user_id",id)
+        : db.from("animeplex_user_runtime_controls").insert({user_id:id,...banFields});
+      const {data:row,error:saveError}=await banWrite
         .select("current_provider_id,forced_provider_id,provider_locked,is_banned,ban_reason,available_providers,last_seen_at").single();
       if(saveError){
         // Best-effort compensation: do not leave Auth and the app dashboard
