@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { validateManagedProvider, canManageUsers, usersPage, providersPage,
-  setAdminUserSourcesAccess, validateUserEdit, updateAdminUser, deleteAdminUser }
+  setAdminUserSourcesAccess, validateUserEdit, updateAdminUser, deleteAdminUser,
+  setAdminUserProvider, setAdminUserBan }
   from '../src/admin_management.js';
 
 const input = {
@@ -136,4 +137,50 @@ test('non-admin cannot edit or delete users',async()=>{
   const db={functions:{invoke:()=>{throw Error('should not invoke');}}};
   await assert.rejects(updateAdminUser(db,state,'u1',{display_name:'X',email:'a@b.com'}),/Owner\/admin/);
   await assert.rejects(deleteAdminUser(db,state,'u1','a@b.com'),/Owner\/admin/);
+});
+
+test('account detail displays reported provider and ban controls safely',()=>{
+  const state={member:{role:'owner'},userDetail:{
+    user:{id:'u1',email:'test@example.com'},
+    runtimeControls:{current_provider_id:'cs:movie',provider_locked:true,
+      forced_provider_id:'cs:movie',is_banned:false,ban_reason:null,
+      available_providers:[{id:'cs:movie',name:'MovieBox <svg>'}]}
+  }};
+  const page=usersPage(state);
+  assert.match(page,/Current source/);
+  assert.match(page,/id="admin-user-provider"/);
+  assert.match(page,/id="admin-user-ban"/);
+  assert.match(page,/cs:movie/);
+  assert.match(page,/&lt;svg&gt;/);
+  assert.doesNotMatch(page,/<svg>/);
+});
+test('admin provider control rejects sources not reported installed',async()=>{
+  const state={member:{role:'owner'},userDetail:{user:{id:'u1'},
+    runtimeControls:{available_providers:[{id:'cs:movie',name:'MovieBox'}]}}};
+  const calls=[];
+  const db={functions:{invoke:async(_name,{body})=>{
+    calls.push(body);return {data:{ok:true,controls:{provider_locked:body.locked}},error:null};
+  }}};
+  await assert.rejects(setAdminUserProvider(db,state,'u1',{sourceId:'ani:missing',locked:true}),/reported/);
+  await setAdminUserProvider(db,state,'u1',{sourceId:'cs:movie',locked:true});
+  assert.deepEqual(calls[0],{action:'provider',userId:'u1',sourceId:'cs:movie',locked:true});
+  assert.equal(state.userDetail.runtimeControls.provider_locked,true);
+});
+test('ban requires a reason and unban resets the user state',async()=>{
+  const state={member:{role:'admin'},userDetail:{user:{id:'u1'},runtimeControls:{is_banned:false}}};
+  const calls=[];
+  const db={functions:{invoke:async(_name,{body})=>{
+    calls.push(body);
+    return {data:{ok:true,controls:{is_banned:body.action==='ban',
+      ban_reason:body.reason||null}},error:null};
+  }}};
+  await assert.rejects(setAdminUserBan(db,state,'u1',true,'x'),/reason/);
+  assert.equal(calls.length,0);
+  await setAdminUserBan(db,state,'u1',true,'Testing account abuse');
+  assert.equal(state.userDetail.runtimeControls.is_banned,true);
+  assert.match(usersPage(state),/Testing account abuse/);
+  await setAdminUserBan(db,state,'u1',false);
+  assert.equal(state.userDetail.runtimeControls.is_banned,false);
+  assert.equal(calls[1].action,'unban');
+  await assert.rejects(setAdminUserBan(db,{...state,member:{role:'release_manager'}},'u1',true,'reason'),/Owner\/admin/);
 });
