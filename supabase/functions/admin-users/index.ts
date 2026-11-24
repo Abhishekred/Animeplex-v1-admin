@@ -85,7 +85,7 @@ Deno.serve(async (req: Request) => {
     if (input.action === "provider") {
       const selected = typeof input.sourceId === "string" ? input.sourceId.trim() : "";
       const locked = input.locked === true;
-      if (selected && !/^[A-Za-z0-9_./:-]{1,220}$/.test(selected)) {
+      if (selected && !/^[A-Za-z0-9_./:@+-]{1,220}$/.test(selected)) {
         return json({ error: "Invalid installed source ID" }, 400);
       }
       if (locked && !selected) return json({ error: "Select a provider before locking" }, 400);
