@@ -15,3 +15,25 @@
 .user-delete-btn:hover {background:rgba(255,91,112,.12)!important}
 #admin-user-edit .label {margin-bottom:-9px}
 @media(max-width:800px){.user-actions{flex-wrap:wrap;min-width:160px}}
+
+/* Admin multi-ecosystem repository discovery and selection */
+#admin-repository-form .label{margin-bottom:-9px}
+.provider-format-hint{font-size:12px;color:var(--muted,#aaa);margin-top:-8px}
+.provider-repo-row{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.provider-row-actions{display:flex;gap:8px;flex-wrap:wrap}
+.provider-url{overflow-wrap:anywhere;word-break:break-word}
+.provider-catalog{margin-top:18px}
+.provider-source-list{max-height:460px;overflow-y:auto;border:1px solid rgba(255,255,255,.07);border-radius:12px}
+.provider-source-item{display:flex;gap:12px;padding:12px 10px;border-bottom:1px solid rgba(255,255,255,.07);cursor:pointer;align-items:center}
+.provider-source-item:last-child{border-bottom:none}
+.provider-source-item:hover{background:rgba(255,255,255,.03)}
+.provider-source-item input[type=checkbox]{width:18px;height:18px;accent-color:#ff4b64;flex-shrink:0}
+.provider-source-info{display:flex;flex-direction:column;min-width:0;gap:3px}
+.provider-source-info strong{font-size:13px;overflow-wrap:anywhere}
+.provider-source-info small{font-size:11px;color:var(--muted,#999);overflow-wrap:anywhere}
+.provider-filter{display:flex;gap:10px;margin-bottom:12px}
+.provider-filter .field{flex:1;min-width:120px}
+.provider-select-toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.provider-pagination{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:12px 0 14px;color:var(--muted,#999);font-size:12px;flex-wrap:wrap}
+.provider-selected-table{margin-top:18px}
+@media(max-width:720px){.provider-filter{flex-wrap:wrap}.provider-pagination{align-items:flex-start}.provider-repo-row{align-items:flex-start}}
