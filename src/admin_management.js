@@ -52,18 +52,26 @@ export async function loadAdminUsers(db, state, query = '', offset = 0) {
 export async function openAdminUser(db, state, id) {
   allowed(state.member?.role);
   if (!state.userRows?.some(row=>row.id===id)) throw new Error('Select a listed user.');
-  const [standard, scoped, permissions] = await Promise.all([
+  const [standard, scoped, permissions, runtime] = await Promise.all([
     db.rpc('animeplex_admin_user_detail', {p_user_id:id}),
     db.rpc('animeplex_admin_user_scoped_detail', {p_user_id:id}),
     db.from('animeplex_user_permissions')
       .select('sources_access').eq('user_id', id).maybeSingle(),
+    db.from('animeplex_user_runtime_controls')
+      .select('current_provider_id,forced_provider_id,provider_locked,is_banned,ban_reason,available_providers,last_seen_at')
+      .eq('user_id',id).maybeSingle(),
   ]);
   if (standard.error) throw standard.error;
   if (scoped.error) throw scoped.error;
   if (permissions.error) throw permissions.error;
+  if (runtime.error) throw runtime.error;
   state.userDetail = {
     ...standard.data, ...scoped.data,
     sourcesAccess: permissions.data?.sources_access === true,
+    runtimeControls: runtime.data || {
+      current_provider_id:null,forced_provider_id:null,provider_locked:false,
+      is_banned:false,ban_reason:null,available_providers:[],last_seen_at:null,
+    },
   };
 }
 export async function setAdminUserSourcesAccess(db, state, id, enabled) {
@@ -101,6 +109,29 @@ export async function updateAdminUser(db, state, id, values) {
     ...state.userDetail.user,...data.user,
   }};
   state.userRows=(state.userRows || []).map(u=>u.id===id?{...u,...data.user}:u);
+}
+export async function setAdminUserProvider(db,state,id,values) {
+  allowed(state.member?.role);
+  if (state.userDetail?.user?.id!==id)throw new Error('Open the selected user profile first.');
+  const sourceId=String(values.sourceId||'').trim();
+  const locked=values.locked===true;
+  if(locked&&!sourceId)throw new Error('Select a provider before locking.');
+  const installed=state.userDetail.runtimeControls?.available_providers||[];
+  if(sourceId&&!installed.some(x=>x.id===sourceId))
+    throw new Error('Select a provider reported by this user\'s app.');
+  const data=await accountRequest(db,{action:'provider',userId:id,sourceId,locked});
+  state.userDetail.runtimeControls=data.controls;
+}
+export async function setAdminUserBan(db,state,id,banned,reason='') {
+  allowed(state.member?.role);
+  if(state.userDetail?.user?.id!==id)throw new Error('Open the selected user profile first.');
+  const trimmed=String(reason||'').trim();
+  if(banned&&(trimmed.length<3||trimmed.length>500))
+    throw new Error('Ban reason must be 3–500 characters.');
+  const data=await accountRequest(db,{
+    action:banned?'ban':'unban',userId:id,...(banned?{reason:trimmed}:{}),
+  });
+  state.userDetail.runtimeControls=data.controls;
 }
 export async function deleteAdminUser(db, state, id, confirmEmail) {
   allowed(state.member?.role);
@@ -198,6 +229,27 @@ export function usersPage(state) {
       '<label class="label" for="edit-user-email">Email address</label>'+
       '<input class="field" id="edit-user-email" name="email" type="email" maxlength="254" required value="'+esc(u.email)+'" autocomplete="off">'+
       '<div><button type="submit" class="btn btn-primary">Save user changes</button></div></form></section>'+
+      '<section class="card" style="margin-top:16px"><div class="card-head"><h2>Provider control</h2><span class="pill">'+(d.runtimeControls?.provider_locked?'Locked':'Manual switching allowed')+'</span></div>'+
+      '<form class="card-body stack" id="admin-user-provider" data-id="'+esc(u.id)+'">'+
+      '<p class="subtitle" style="margin:0">Current source: <strong>'+col(d.runtimeControls?.current_provider_id||'Not yet reported')+'</strong> · Last app report '+date(d.runtimeControls?.last_seen_at)+'</p>'+
+      '<label class="label" for="admin-user-source-id">Installed provider on this user\'s device</label>'+
+      '<select class="field" id="admin-user-source-id" name="source_id">'+
+      '<option value="">Keep current provider</option>'+
+      (d.runtimeControls?.available_providers||[]).map(p=>'<option value="'+esc(p.id)+'"'+((d.runtimeControls?.forced_provider_id||d.runtimeControls?.current_provider_id)===p.id?' selected':'')+'>'+col(p.name)+' ('+col(p.id)+')</option>').join('')+
+      '</select>'+
+      (!(d.runtimeControls?.available_providers||[]).length?'<p class="subtitle">No installed sources reported yet. Open the latest AnimePlex APK with this account, then refresh User Details.</p>':'')+
+      '<label><input type="checkbox" name="provider_locked"'+(d.runtimeControls?.provider_locked?' checked':'')+'> Lock this user to selected provider</label>'+
+      '<p class="subtitle">Unlocked users can switch freely. Lock requires an installed source. Your selection is applied when the app syncs.</p>'+
+      '<div><button type="submit" class="btn btn-primary"'+(d.runtimeControls?.is_banned?' disabled':'')+'>Save provider control</button></div></form></section>'+
+      '<section class="card" style="margin-top:16px"><div class="card-head"><h2>Ban / unban account</h2><span class="pill">'+(d.runtimeControls?.is_banned?'Banned':'Active')+'</span></div>'+
+      (d.runtimeControls?.is_banned
+        ? '<div class="card-body stack"><p class="subtitle">Reason shown to the user: <strong>'+col(d.runtimeControls.ban_reason)+'</strong></p>'+
+          '<button type="button" class="btn btn-primary" data-action="unban-user" data-id="'+esc(u.id)+'">Unban user</button></div>'
+        : '<form class="card-body stack" id="admin-user-ban" data-id="'+esc(u.id)+'">'+
+          '<label for="ban-reason" class="label">Reason (required, visible to user)</label>'+
+          '<textarea id="ban-reason" class="field" name="reason" minlength="3" maxlength="500" required rows="3" placeholder="Explain why the account is banned"></textarea>'+
+          '<div><button class="btn btn-ghost user-delete-btn" type="submit">Ban this user</button></div></form>')+
+      '</section>'+
       '<section class="card" style="margin-top:16px"><div class="card-head"><h2>Delete account</h2><span class="pill">Danger zone</span></div>'+
       '<div class="card-body"><p class="subtitle" style="margin:0 0 14px">Permanently removes the account and its synced app data. Owner/admin accounts are protected. Requires typing the exact email before deletion.</p>'+
       '<button type="button" class="btn btn-ghost user-delete-btn" data-action="delete-user" data-id="'+esc(u.id)+'">Delete this user</button></div></section>'+
