@@ -38,7 +38,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const input = await req.json().catch(() => null);
-    if (!input || typeof input !== "object" || !["update", "delete"].includes(input.action) ||
+    if (!input || typeof input !== "object" || !["update", "delete", "provider", "ban", "unban"].includes(input.action) ||
         !uuid(input.userId)) {
       return json({ error: "Invalid account request" }, 400);
     }
@@ -74,13 +74,93 @@ Deno.serve(async (req: Request) => {
       return json({ ok: true, user: { id, email, display_name: displayName } });
     }
 
-    // No account with an admin-membership record may ever be deleted here,
-    // including inactive owners/admins. The SQL purge function repeats this guard.
-    if (id === actor.id) return json({ error: "You cannot delete your own admin account" }, 403);
+    // Restrict bans, provider locks and deletion to non-admin user accounts.
+    // Protect inactive admins too; self-management cannot bypass this.
+    if (id === actor.id) return json({ error: "You cannot restrict your own admin account" }, 403);
     const { data: protectedMember, error: protectedError } = await db.from("admin_members")
       .select("user_id").eq("user_id", id).maybeSingle();
     if (protectedError) return json({ error: "Unable to check admin protection" }, 500);
-    if (protectedMember) return json({ error: "Protected admin account cannot be deleted" }, 403);
+    if (protectedMember) return json({ error: "Protected admin account cannot be restricted" }, 403);
+
+    if (input.action === "provider") {
+      const selected = typeof input.sourceId === "string" ? input.sourceId.trim() : "";
+      const locked = input.locked === true;
+      if (selected && !/^[A-Za-z0-9_./:-]{1,220}$/.test(selected)) {
+        return json({ error: "Invalid installed source ID" }, 400);
+      }
+      if (locked && !selected) return json({ error: "Select a provider before locking" }, 400);
+      const { data: existing, error: existingError } = await db.from("animeplex_user_runtime_controls")
+        .select("available_providers,current_provider_id,is_banned").eq("user_id",id).maybeSingle();
+      if (existingError) return json({ error: existingError.message }, 500);
+      if (existing?.is_banned) return json({ error: "Unban user before changing providers" }, 409);
+      const available = Array.isArray(existing?.available_providers) ? existing.available_providers : [];
+      if (selected && !available.some((item: {id?:string}) => item.id === selected)) {
+        return json({ error: "Provider not installed or not yet reported by this user's app" }, 409);
+      }
+      const payload = {
+        user_id:id,
+        current_provider_id:selected || existing?.current_provider_id || null,
+        forced_provider_id:locked ? selected : null,
+        provider_locked:locked,
+        updated_at:new Date().toISOString(),
+      };
+      const { data: row, error: saveError } = await db.from("animeplex_user_runtime_controls")
+        .upsert(payload,{onConflict:"user_id"})
+        .select("current_provider_id,forced_provider_id,provider_locked,is_banned,ban_reason,available_providers,last_seen_at").single();
+      if (saveError) return json({ error: saveError.message }, 500);
+      const {error:logError}=await db.from("admin_audit_logs").insert({
+        actor_id:actor.id,actor_email:actor.email||null,actor_role:member.role,
+        action:"user_provider_control",target_type:"user",target_id:id,
+        details:{selected_source_id:selected||null,locked},
+      });
+      if(logError)console.error("provider audit insert failed",logError.message);
+      return json({ok:true,controls:row});
+    }
+
+    if (input.action === "ban" || input.action === "unban") {
+      const banned = input.action === "ban";
+      const reason = typeof input.reason === "string" ? input.reason.trim() : "";
+      if (banned && (reason.length < 3 || reason.length > 500)) {
+        return json({ error: "Ban reason must be 3–500 characters" }, 400);
+      }
+      const {data:previous,error:lookupError}=await db.from("animeplex_user_runtime_controls")
+        .select("is_banned").eq("user_id",id).maybeSingle();
+      if(lookupError)return json({error:"Unable to check account status"},500);
+      // Auth-level ban prevents future sign-ins and token refresh; a local UI-only
+      // flag cannot provide this guarantee.
+      const {error:authBanError}=await db.auth.admin.updateUserById(id,{
+        ban_duration:banned?"876000h":"none",
+      });
+      if(authBanError)return json({error:authBanError.message},409);
+      const {data:row,error:saveError}=await db.from("animeplex_user_runtime_controls")
+        .upsert({
+          user_id:id,is_banned:banned,ban_reason:banned?reason:null,
+          banned_at:banned?new Date().toISOString():null,
+          updated_at:new Date().toISOString(),
+        },{onConflict:"user_id"})
+        .select("current_provider_id,forced_provider_id,provider_locked,is_banned,ban_reason,available_providers,last_seen_at").single();
+      if(saveError){
+        // Best-effort compensation: do not leave Auth and the app dashboard
+        // inconsistent if the state record cannot be saved.
+        if(previous?.is_banned!==banned){
+          const rollback=await db.auth.admin.updateUserById(id,{
+            ban_duration:previous?.is_banned?"876000h":"none",
+          });
+          if(rollback.error)console.error("Auth ban rollback failed",rollback.error.message);
+        }
+        return json({error:"Auth state was updated but controls could not be saved: "+saveError.message},500);
+      }
+      const {error:logError}=await db.from("admin_audit_logs").insert({
+        actor_id:actor.id,actor_email:actor.email||null,actor_role:member.role,
+        action:banned?"user_banned":"user_unbanned",target_type:"user",target_id:id,
+        details:banned?{reason}:{},
+      });
+      if(logError)console.error("ban audit insert failed",logError.message);
+      return json({ok:true,controls:row});
+    }
+
+    // No account with an admin-membership record may ever be deleted here,
+    // including inactive owners/admins. The SQL purge function repeats this guard.
     const expectedEmail = (target.email ?? "").trim().toLowerCase();
     if (!expectedEmail || input.confirmEmail !== expectedEmail) {
       return json({ error: "Type the account's exact email to confirm deletion" }, 400);
