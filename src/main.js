@@ -1,3 +1,4 @@
+import { curatedPage, loadCurated, searchCurated, publishCurated, handleCuratedAction } from './curated_catalogue.js';
 
 import './style.css';
 import './glass.css';
@@ -147,7 +148,7 @@ function shell() {
         ${nav('Streaming region','region','globe')}
         ${nav('About page','about','globe')}
         ${nav('Update settings','settings','sliders')}
-        ${canManageUsers(state.member?.role) ? nav('Users','users','users') + nav('Provider sources','providers','layers') : ''}
+        ${canManageUsers(state.member?.role) ? nav('Users','users','users') + nav('Provider sources','providers','layers') + nav('Catalogue','catalogue','grid') : ''}
       </div>
       <div class="nav-spacer"></div>
       <div class="side-status"><div class="side-status-title"><i class="online-dot" style="${c.enabled ? '' : 'background:#e8aa5d;box-shadow:0 0 9px #e8aa5d6b'}"></i> ${esc(stateLabel)}</div>
@@ -160,13 +161,13 @@ function shell() {
     </aside>
     <main class="main">
       <div class="topbar"><div class="mobile-top"><button type="button" class="icon-btn" data-action="menu" aria-label="Open menu">${icon('menu',22)}</button></div>
-      <div class="breadcrumb"><span>AnimePlex</span> ${icon('arrow',13)} <strong>${state.page === 'overview' ? 'Overview' : state.page === 'releases' ? 'Releases' : state.page === 'controls' ? 'Player controls' : state.page === 'region' ? 'Streaming region' : state.page === 'about' ? 'About page' : state.page === 'users' ? 'Users' : state.page === 'providers' ? 'Provider sources' : 'Update settings'}</strong></div>
+      <div class="breadcrumb"><span>AnimePlex</span> ${icon('arrow',13)} <strong>${state.page === 'overview' ? 'Overview' : state.page === 'releases' ? 'Releases' : state.page === 'controls' ? 'Player controls' : state.page === 'region' ? 'Streaming region' : state.page === 'about' ? 'About page' : state.page === 'catalogue' ? 'Catalogue' : state.page === 'users' ? 'Users' : state.page === 'providers' ? 'Provider sources' : 'Update settings'}</strong></div>
       <div class="bar-actions"><span class="bar-time">${esc(new Date().toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}))}</span>
         <div class="bar-chip">${icon('shield',15)} Secure workspace</div>
       </div></div>
       <div class="content">
         ${state.error ? `<div class="alert warning" style="margin-bottom:22px">${icon('alert',19)} ${esc(state.error)}</div>` : ''}
-        ${state.page === 'overview' ? overview() : state.page === 'releases' ? releasePage() : state.page === 'controls' ? controlsPage() : state.page === 'region' ? regionPage() : state.page === 'about' ? aboutPage() : state.page === 'users' ? usersPage(state) : state.page === 'providers' ? multiProvidersPage(state) : settingsPage()}
+        ${state.page === 'overview' ? overview() : state.page === 'releases' ? releasePage() : state.page === 'controls' ? controlsPage() : state.page === 'region' ? regionPage() : state.page === 'about' ? aboutPage() : state.page === 'catalogue' ? curatedPage(state) : state.page === 'users' ? usersPage(state) : state.page === 'providers' ? multiProvidersPage(state) : settingsPage()}
       </div>
     </main></div>`;
 }
@@ -797,6 +798,18 @@ async function login(form) {
   await syncSession(data.user);
 }
 document.addEventListener('submit',async(e)=>{
+  if(['curated-search','curated-publish'].includes(e.target.id)){
+    e.preventDefault();
+    if(state.busy || !canManageUsers(state.member?.role))return;
+    state.busy=true;
+    try {
+      const form=new FormData(e.target);
+      if(e.target.id==='curated-search') await searchCurated(state,form);
+      else {await publishCurated(supabase,state,form);toast('Catalogue title published.');}
+    } catch(error){toast(errorMessage(error),true);}
+    finally {state.busy=false;render();}
+    return;
+  }
   if(e.target.id==='login-form'){e.preventDefault();await login(e.target);}
   if(e.target.id==='release-form'){e.preventDefault();await saveDraft(e.target);}
   if(e.target.id==='admin-user-search'){
@@ -941,13 +954,23 @@ document.addEventListener('change',async(e)=>{
   await saveSettings({[key]:value},key==='enabled'?(value?'Update delivery enabled.':'All update offers paused.'):'Update setting saved.');
 });
 document.addEventListener('click',async(e)=>{
+  const catalogue=e.target.closest('[data-curated]');
+  if(catalogue && canManageUsers(state.member?.role)){
+    if(state.busy)return;
+    state.busy=true;
+    try {await handleCuratedAction(catalogue.dataset.curated,catalogue.dataset.id,supabase,state);}
+    catch(error){toast(errorMessage(error),true);}
+    finally {state.busy=false;render();}
+    return;
+  }
   const page=e.target.closest('[data-page]')?.dataset.page;
-  if(page&&['overview','releases','settings','controls','region','about','users','providers'].includes(page)){
-    if (['users','providers'].includes(page) && !canManageUsers(state.member?.role)) {
+  if(page&&['overview','releases','settings','controls','region','about','users','providers','catalogue'].includes(page)){
+    if (['users','providers','catalogue'].includes(page) && !canManageUsers(state.member?.role)) {
       toast('Owner/admin permission required.',true);return;
     }
     state.page=page;state.mobileOpen=false;state.error='';render();window.scrollTo(0,0);
     try {
+      if(page==='catalogue') await loadCurated(supabase,state);
       if(page==='users') await loadAdminUsers(supabase,state,state.userSearch,state.userOffset);
       if(page==='providers') await loadProviderRepositories(supabase,state);
       render();
