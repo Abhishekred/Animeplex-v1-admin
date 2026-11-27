@@ -1,4 +1,4 @@
-import { curatedPage, loadCurated, searchCurated, publishCurated, handleCuratedAction } from './curated_catalogue.js';
+import { curatedPage, loadCurated, searchCurated, publishCurated, applyCatalogueProviders, publishedColumns, handleCuratedAction } from './curated_catalogue.js';
 
 import './style.css';
 import './glass.css';
@@ -802,13 +802,18 @@ async function login(form) {
   await syncSession(data.user);
 }
 document.addEventListener('submit',async(e)=>{
-  if(['curated-search','curated-publish'].includes(e.target.id)){
+  if(['curated-search','curated-publish','curated-defaults'].includes(e.target.id)){
     e.preventDefault();
     if(state.busy || !canManageUsers(state.member?.role))return;
     state.busy=true;
     try {
       const form=new FormData(e.target);
       if(e.target.id==='curated-search') await searchCurated(state,form);
+      else if(e.target.id==='curated-defaults'){
+        if(!window.confirm('Apply this order to every catalogue title, including custom orders?')) return;
+        await applyCatalogueProviders(supabase,state,form);
+        toast('Provider order applied to all catalogue titles.');
+      }
       else {await publishCurated(supabase,state,form);toast('Catalogue title published.');}
       render();
     } catch(error){toast(errorMessage(error),true);}
@@ -898,6 +903,12 @@ document.addEventListener('submit',async(e)=>{
   }
 });
 document.addEventListener('input',(e)=>{
+  if(e.target.id==='catalogue-filter'){
+    state.curatedFilter=e.target.value;
+    state.curatedPages={};
+    document.getElementById('catalogue-columns').innerHTML=publishedColumns(state);
+    return;
+  }
   const form=e.target.closest('#about-form');
   if(!form)return;
   const site=String(form.elements.namedItem('about_website_url')?.value ?? '').trim();
@@ -909,6 +920,11 @@ document.addEventListener('input',(e)=>{
   if(instagramPreview)instagramPreview.textContent='@'+(normalizeInstagramHandle(rawHandle) || String(rawHandle).trim().replace(/^@/,''));
 });
 document.addEventListener('change',async(e)=>{
+  if(e.target.id==='catalogue-provider-mode'){
+    const fields=document.getElementById('catalogue-custom');
+    fields.disabled=fields.hidden=e.target.value==='universal';
+    return;
+  }
   if(e.target?.id==='provider-kind'){
     state.providerDraftKind=e.target.value;
     const hint=document.getElementById('provider-format-hint');
@@ -959,6 +975,25 @@ document.addEventListener('change',async(e)=>{
   await saveSettings({[key]:value},key==='enabled'?(value?'Update delivery enabled.':'All update offers paused.'):'Update setting saved.');
 });
 document.addEventListener('click',async(e)=>{
+  const section=e.target.closest('[data-catalogue-kind]');
+  if(section){
+    state.curatedMobileKind=section.dataset.catalogueKind;
+    document.getElementById('catalogue-columns').dataset.mobileKind=state.curatedMobileKind;
+    section.parentElement.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b===section)));
+    return;
+  }
+  const pageButton=e.target.closest('[data-catalogue-page]');
+  if(pageButton){
+    const kind=pageButton.dataset.kind;
+    state.curatedPages ??= {};
+    state.curatedPages[kind]=Number(pageButton.dataset.cataloguePage);
+    const columns=document.getElementById('catalogue-columns');
+    columns.innerHTML=publishedColumns(state);
+    const heading=columns.querySelector('[data-kind="'+kind+'"] h2');
+    heading.tabIndex=-1;
+    heading.focus();
+    return;
+  }
   const catalogue=e.target.closest('[data-curated]');
   if(catalogue && canManageUsers(state.member?.role)){
     if(state.busy)return;
@@ -966,6 +1001,9 @@ document.addEventListener('click',async(e)=>{
     try {await handleCuratedAction(catalogue.dataset.curated,catalogue.dataset.id,supabase,state);}
     catch(error){toast(errorMessage(error),true);}
     finally {state.busy=false;render();}
+    if(state.curatedDraft && ['pick','edit'].includes(catalogue.dataset.curated)){
+      document.querySelector('#curated-publish input[name="platform"]')?.focus();
+    }
     return;
   }
   const page=e.target.closest('[data-page]')?.dataset.page;

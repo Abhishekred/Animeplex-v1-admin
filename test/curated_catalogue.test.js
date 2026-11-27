@@ -38,3 +38,20 @@ test('catalogue presentation retains platform spelling and optional badges', asy
   form.set('rating','15');
   assert.throws(()=>presentationFields(form,[]));
 });
+
+test('published search filters both sections and pages each one independently', async () => {
+  const {publishedColumns}=await import('../src/curated_catalogue.js');
+  const make=(kind,i)=>({kind,tmdb_id:i,title:'Title '+i,poster_url:'https://example.com/p.jpg'});
+  const state={curatedRows:[...Array.from({length:14},(_,i)=>make('movie',i)),make('series',90)]};
+  assert.match(publishedColumns(state),/data-id="movie:0"/);
+  assert.doesNotMatch(publishedColumns(state),/data-id="movie:13"/);
+  state.curatedPages={movie:1};
+  let html=publishedColumns(state);
+  assert.match(html,/data-id="movie:13"/);
+  assert.match(html,/data-id="series:90"/);
+  state.curatedFilter=' TITLE 90 ';
+  html=publishedColumns(state);
+  assert.match(html,/No matching titles/);
+  assert.match(html,/data-id="series:90"/);
+  assert.doesNotMatch(html,/data-id="movie:/);
+});
