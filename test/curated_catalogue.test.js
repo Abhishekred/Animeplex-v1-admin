@@ -24,3 +24,17 @@ test('picking a search result uses its section, poster and confirmed TMDB identi
   assert.equal(state.curatedDraft.tmdb_id,156016);
   assert.equal(state.curatedDraft.kind,'series');
 });
+
+test('catalogue presentation retains platform spelling and optional badges', async () => {
+  const { presentationFields } = await import('../src/curated_catalogue.js');
+  const form = new FormData();
+  form.set('platform', ' prime video ');
+  form.set('language_badge','Hindi');
+  form.set('rating','8.3');
+  form.set('trending','on');
+  const value = presentationFields(form,[{platform:'Prime Video'}]);
+  assert.deepEqual(value,{platform:'Prime Video',language_badge:'Hindi',rating:8.3,trending:true,backdrop_url:''});
+  assert.equal(presentationFields(new FormData(),[]).rating,null);
+  form.set('rating','15');
+  assert.throws(()=>presentationFields(form,[]));
+});

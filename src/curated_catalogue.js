@@ -56,8 +56,24 @@ export async function pickCurated(state, imdb) {
   const {meta} = await json(metadata+'/meta/'+hit.kind+'/'+hit.imdb+'.json');
   const id = Number(meta?.moviedb_id);
   if (meta?.id !== imdb || !Number.isSafeInteger(id) || id <= 0) throw Error('This result has no matching TMDB title. Choose another result.');
+  const score = Number.parseFloat(meta.imdbRating);
+  const artwork = {backdrop_url:/^https:\/\//.test(meta.background || '') ? meta.background : '',
+    rating:Number.isFinite(score) && score >= 0 && score <= 10 ? score : null};
   state.curatedDraft = state.curatedRows.find(row => row.kind === hit.kind && row.tmdb_id === id) ||
-    {...hit, tmdb_id:id, sort_order:0, provider_ids:[]};
+    {...hit, ...artwork, tmdb_id:id, sort_order:0, provider_ids:[]};
+}
+
+export function presentationFields(form, rows) {
+  const entered = String(form.get('platform') || '').trim();
+  const platform = rows.find(row => row.platform && row.platform.toLowerCase() === entered.toLowerCase())?.platform || entered;
+  const language_badge = String(form.get('language_badge') || '').trim();
+  const backdrop_url = String(form.get('backdrop_url') || '').trim();
+  const score = String(form.get('rating') ?? '').trim();
+  const rating = score === '' ? null : Number(score);
+  if (platform.length > 60 || language_badge.length > 24) throw Error('Platform or language badge is too long.');
+  if (backdrop_url && (new URL(backdrop_url).protocol !== 'https:' || backdrop_url.length > 2048)) throw Error('Use an HTTPS banner image URL.');
+  if (rating !== null && (!Number.isFinite(rating) || rating < 0 || rating > 10)) throw Error('Rating must be between 0 and 10.');
+  return {platform, language_badge, backdrop_url, rating, trending:form.has('trending')};
 }
 
 export async function publishCurated(db, state, form) {
@@ -66,7 +82,8 @@ export async function publishCurated(db, state, form) {
   const sort = Number(form.get('sort_order'));
   if (!Number.isSafeInteger(sort) || sort < 0) throw Error('Enter a non-negative display order.');
   const data = {kind:row.kind, tmdb_id:row.tmdb_id, title:row.title, poster_url:row.poster_url,
-    release_year:row.release_year, sort_order:sort, provider_ids:providerOrder(form)};
+    release_year:row.release_year, sort_order:sort, provider_ids:providerOrder(form),
+    ...presentationFields(form,state.curatedRows)};
   const {error} = await db.from(table).upsert(data, {onConflict:'kind,tmdb_id'});
   if (error) throw error;
   state.curatedDraft = null;
@@ -95,6 +112,12 @@ export function curatedPage(state) {
     (state.curatedHits?.map(r=>item(r,button('pick',r.imdb,'Select'))).join('') ?? '')+
     (state.curatedHits?.length===0?'<p>No matching titles with posters.</p>':'')+'</div></section>'+
     (draft?'<section class="card"><div class="card-head"><h2>Edit selection</h2></div><form id="curated-publish" class="card-body">'+item(draft,'')+
+    '<label class="field-label">Platform<input class="field" name="platform" list="catalogue-platforms" maxlength="60" placeholder="e.g. Prime Video" value="'+esc(draft.platform||'')+'"></label>'+
+    '<datalist id="catalogue-platforms">'+[...new Set(list.map(r=>r.platform).filter(Boolean))].map(p=>'<option value="'+esc(p)+'"></option>').join('')+'</datalist>'+
+    '<label class="field-label">Language badge<input class="field" name="language_badge" maxlength="24" placeholder="Hindi, Multi…" value="'+esc(draft.language_badge||'')+'"></label>'+
+    '<label><input name="trending" type="checkbox" '+(draft.trending?'checked':'')+'> Show in Trending</label>'+
+    '<label class="field-label">Trending banner image<input class="field" type="url" name="backdrop_url" maxlength="2048" placeholder="HTTPS image URL" value="'+esc(draft.backdrop_url||'')+'"></label>'+
+    '<label class="field-label">Movie rating (0–10)<input class="field" name="rating" type="number" min="0" max="10" step="0.1" value="'+esc(draft.rating??'')+'"></label>'+
     '<datalist id="catalogue-provider-ids">'+(state.curatedChoices||[]).map(p=>'<option value="'+esc(p.id)+'">'+esc(p.name||p.id)+'</option>').join('')+'</datalist>'+
     '<p>Choose a reported provider or enter its exact installed source ID.</p>'+
     Array.from({length:4},(_,i)=>'<label class="field-label">'+(i===0?'Primary provider':'Fallback '+i)+'<input class="field" name="provider" list="catalogue-provider-ids" maxlength="220" '+(i===0?'required':'')+' value="'+esc(draft.provider_ids[i]||'')+'"></label>').join('')+
