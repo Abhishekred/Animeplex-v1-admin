@@ -1,4 +1,4 @@
-import { curatedPage, loadCurated, searchCurated, publishCurated, applyCatalogueProviders, publishedColumns, handleCuratedAction } from './curated_catalogue.js';
+import { addFallback, curatedPage, loadCurated, searchCurated, publishCurated, applyCatalogueProviders, publishedColumns, handleCuratedAction } from './curated_catalogue.js';
 
 import './style.css';
 import './glass.css';
@@ -920,6 +920,13 @@ document.addEventListener('input',(e)=>{
   if(instagramPreview)instagramPreview.textContent='@'+(normalizeInstagramHandle(rawHandle) || String(rawHandle).trim().replace(/^@/,''));
 });
 document.addEventListener('change',async(e)=>{
+  if(e.target.id==='provider-source-category'){
+    state.providerCatalogCategory=e.target.value;
+    state.providerCatalogQuery=e.target.form.elements.query.value;
+    state.providerCatalogPage=0;
+    render();
+    return;
+  }
   if(e.target.id==='catalogue-provider-mode'){
     const fields=document.getElementById('catalogue-custom');
     fields.disabled=fields.hidden=e.target.value==='universal';
@@ -975,6 +982,8 @@ document.addEventListener('change',async(e)=>{
   await saveSettings({[key]:value},key==='enabled'?(value?'Update delivery enabled.':'All update offers paused.'):'Update setting saved.');
 });
 document.addEventListener('click',async(e)=>{
+  const addButton=e.target.closest('[data-add-fallback]');
+  if(addButton){addFallback(addButton);return;}
   const section=e.target.closest('[data-catalogue-kind]');
   if(section){
     state.curatedMobileKind=section.dataset.catalogueKind;

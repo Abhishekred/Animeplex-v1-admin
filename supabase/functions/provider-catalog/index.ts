@@ -62,12 +62,16 @@ async function loadJson(url:string):Promise<any>{
     return JSON.parse(new TextDecoder().decode(all));
   }finally{clearTimeout(stop);}
 }
-type Entry={id:string;name:string;type:string;lang:string;version:string;detail?:string};
+type Entry={id:string;name:string;type:string;lang:string;version:string;detail?:string;categories?:string[]};
 function one(id:unknown,name:unknown,type:unknown="",lang:unknown="",version:unknown="",detail?:string):Entry|null{
   const clean=cleanId(id);
   const n=str(name,120);
   if(!clean||!n)return null;
   return {id:clean,name:n,type:str(type,30),lang:str(lang,15),version:str(version,60),...(detail?{detail:detail.slice(0,160)}:{})};
+}
+function contentTypes(raw:unknown):string[] {
+  if (!Array.isArray(raw)) return [];
+  return [...new Set(raw.slice(0,40).map(x=>str(x,40)).filter(Boolean))];
 }
 function unique(items:(Entry|null)[]):Entry[]{
   const seen=new Set<string>();
@@ -81,7 +85,7 @@ async function discover(kind:string,url:string):Promise<{name:string,items:Entry
     const item=one(raw?.id,n,"addon",(raw?.types||[]).join(",").slice(0,15),raw?.version,
       Array.isArray(raw?.catalogs)?raw.catalogs.length+" catalogs":"Stremio addon");
     if(!item)throw Error("Not a valid Stremio manifest.json");
-    return {name:n,items:[item]};
+    return {name:n,items:[{...item,categories:contentTypes(raw.types)}]};
   }
   if(kind==="cloudstream"){
     const manifest=await loadJson(base);
@@ -93,7 +97,10 @@ async function discover(kind:string,url:string):Promise<{name:string,items:Entry
       if(!Array.isArray(plugins))continue;
       parts.push(...plugins.slice(0,2000));
     }
-    const items=unique(parts.map(p=>one(p?.internalName,p?.name||p?.internalName,"plugin",p?.language||p?.lang,p?.version, p?.description)));
+    const items=unique(parts.map(p=>{
+      const entry=one(p?.internalName,p?.name||p?.internalName,"plugin",p?.language||p?.lang,p?.version,p?.description);
+      return entry ? {...entry,categories:contentTypes(p?.tvTypes)} : null;
+    }));
     return {name:str(manifest?.name)||"CloudStream repository",items};
   }
   if(kind==="aniyomi"||kind==="mihon"){

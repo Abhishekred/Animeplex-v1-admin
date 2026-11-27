@@ -55,3 +55,16 @@ test('published search filters both sections and pages each one independently', 
   assert.match(html,/data-id="series:90"/);
   assert.doesNotMatch(html,/data-id="movie:/);
 });
+
+test('ten fallback slots are optional and longer custom orders survive editing', async () => {
+  const {curatedPage}=await import('../src/curated_catalogue.js');
+  const ids=Array.from({length:14},(_,i)=>'cs:Source'+i);
+  const form=new FormData();
+  for(const id of ids)form.append('provider',id);
+  assert.deepEqual(providerOrder(form),ids);
+  const html=curatedPage({curatedDefaults:ids.slice(0,2)});
+  assert.equal((html.match(/name="provider"/g)||[]).length,11);
+  assert.match(html,/Fallback 10/);
+  assert.match(html,/data-add-fallback/);
+  assert.match(curatedPage({curatedDefaults:ids}),/value="cs:Source13"/);
+});

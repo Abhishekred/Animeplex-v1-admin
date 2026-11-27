@@ -11,9 +11,9 @@ const image = row => '<img loading="lazy" alt="" width="48" height="72" style="o
 
 export function providerOrder(form) {
   const providers = form.getAll('provider').map(id => String(id).trim()).filter(Boolean);
-  if (!providers.length || providers.length > 4 || providers.some(p => p.length > 220) ||
+  if (!providers.length || providers.some(p => p.length > 220) ||
       new Set(providers).size !== providers.length) {
-    throw Error('Choose one to four different providers in playback order.');
+    throw Error('Enter at least one provider. Use each ID once, with up to 220 characters.');
   }
   return providers;
 }
@@ -115,12 +115,22 @@ export async function applyCatalogueProviders(db, state, form) {
   await loadCurated(db,state);
 }
 
+function providerField(index, id = '') {
+  const label = index === 0 ? 'Primary provider' : 'Fallback '+index;
+  return '<label class="field-label">'+label+'<input class="field" name="provider" list="catalogue-provider-ids" maxlength="220" '+
+    (index===0?'required ':'')+'value="'+esc(id)+'"></label>';
+}
+
 function providerFields(ids) {
-  return Array.from({length:4},(_,i) => {
-    const label = i === 0 ? 'Primary provider' : 'Fallback '+i;
-    return '<label class="field-label">'+label+'<input class="field" name="provider" list="catalogue-provider-ids" maxlength="220" '+
-      (i===0?'required ':'')+'value="'+esc(ids[i] || '')+'"></label>';
-  }).join('');
+  const fields = Array.from({length:Math.max(11, ids.length)}, (_,i)=>providerField(i,ids[i])).join('');
+  return '<div class="catalogue-fields" data-provider-order>'+fields+'</div>'+
+    '<button type="button" class="btn btn-ghost btn-sm" data-add-fallback>+ Add fallback</button>';
+}
+
+export function addFallback(button) {
+  const fields = button.previousElementSibling;
+  fields.insertAdjacentHTML('beforeend', providerField(fields.children.length));
+  fields.lastElementChild.querySelector('input').focus();
 }
 
 function button(action,id,label) {
@@ -163,7 +173,7 @@ export function curatedPage(state) {
     '<datalist id="catalogue-provider-ids">'+(state.curatedChoices||[]).map(p=>'<option value="'+esc(p.id)+'">'+esc(p.name||p.id)+'</option>').join('')+'</datalist>'+
     '<details class="card catalogue-tool"><summary>AnimePlex Provider</summary><form id="curated-defaults" class="card-body">'+
     '<p>Set the playback order for all movies and web series, including new titles. Applying again replaces individual provider orders.</p>'+
-    '<div class="catalogue-fields">'+providerFields(defaults)+'</div><button class="btn btn-primary">Apply to all titles</button></form></details>'+
+    providerFields(defaults)+'<button class="btn btn-primary">Apply to all titles</button></form></details>'+
     '<details class="card catalogue-tool" '+(state.curatedQuery?'open':'')+'><summary>Add a title</summary><div class="card-body">'+
     '<form id="curated-search" class="provider-filter"><select name="kind" class="field">'+kinds.map(k=>'<option value="'+k+'" '+(state.curatedKind===k?'selected':'')+'>'+kindName(k)+'</option>').join('')+
     '</select><input name="query" class="field" type="search" maxlength="150" required placeholder="Title name" value="'+esc(state.curatedQuery||'')+'"><button class="btn btn-primary">Search</button></form>'+
@@ -178,7 +188,7 @@ export function curatedPage(state) {
     '<label class="field-label">Movie rating (0–10)<input class="field" name="rating" type="number" min="0" max="10" step="0.1" value="'+esc(draft.rating??'')+'"></label>'+
     '<label class="field-label">Playback order<select class="field" name="provider_mode" id="catalogue-provider-mode">'+
     '<option value="universal" '+(universal?'selected':'')+'>Use AnimePlex Provider</option><option value="custom" '+(universal?'':'selected')+'>Custom for this title</option></select></label>'+
-    '<fieldset id="catalogue-custom" class="catalogue-fields" '+(universal?'disabled hidden':'')+'><legend>Title providers</legend>'+
+    '<fieldset id="catalogue-custom" '+(universal?'disabled hidden':'')+'><legend>Title providers</legend>'+
     providerFields(draft.provider_ids || defaults)+'</fieldset>'+
     '<label class="field-label">Display order (lowest first)<input name="sort_order" class="field" type="number" min="0" max="2147483647" required value="'+draft.sort_order+'"></label>'+
     '<button class="btn btn-primary">Publish title</button> '+button('cancel','','Cancel')+'</form></section>':'')+

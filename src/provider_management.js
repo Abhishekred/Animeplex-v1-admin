@@ -61,6 +61,7 @@ function rememberCatalogue(state,repo,items){
   state.activeProviderRepoId=repo.id;
   state.providerCatalog=items;
   state.providerCatalogQuery='';
+  state.providerCatalogCategory='';
   state.providerCatalogPage=0;
   const prior=state.managedProviders||[];
   state.providerSelection=new Set(prior.filter(x=>x.repository_id===repo.id).map(x=>x.plugin_id));
@@ -118,33 +119,66 @@ export async function removeProviderRepository(db,state,repoId){
 }
 const count=(n)=>Number(n||0).toLocaleString('en-IN');
 const details=(item)=>[item.type,item.lang,item.version,item.detail].filter(Boolean).map(safe).join(' · ');
+function byEcosystem(rows, renderGroup) {
+  return PROVIDER_TYPES.map(([kind,label])=>{
+    const group=rows.filter(row=>row.kind===kind);
+    return group.length ? renderGroup(label,group) : '';
+  }).join('');
+}
+
+const categoryLabels={
+  movie:'Movies', tvseries:'Series', series:'Series', anime:'Anime', ova:'Anime',
+  animemovie:'Anime movies', livetv:'Live TV', cartoon:'Cartoons', documentary:'Documentaries',
+  asiandrama:'Asian drama', torrent:'Torrents', manga:'Manga', novel:'Novels',
+  audiobook:'Audiobooks', audio:'Audio', podcast:'Podcasts', animation:'Animation'
+};
+
+function sourceCategories(item, kind) {
+  const values=item.categories?.length ? item.categories : [item.type];
+  const labels=values.filter(Boolean).map(value=>{
+    const key=String(value).toLowerCase();
+    if(key==='plugin'||key==='apk'||key==='addon')return {mihon:'Manga',lnreader:'Novels'}[kind]||'Unspecified';
+    return categoryLabels[key] || String(value);
+  });
+  return [...new Set(labels.length ? labels : ['Unspecified'])];
+}
+
+function sourcePage(state, repo) {
+  const query=(state.providerCatalogQuery||'').trim().toLowerCase();
+  const category=state.providerCatalogCategory;
+  const items=(state.providerCatalog||[]).filter(item=>
+    (!category || sourceCategories(item,repo?.kind).includes(category)) &&
+    (!query || [item.name,item.id,item.type,item.lang].join(' ').toLowerCase().includes(query)));
+  const pages=Math.max(1,Math.ceil(items.length/40));
+  const page=Math.min(pages-1,Math.max(0,state.providerCatalogPage||0));
+  return {list:items.slice(page*40,(page+1)*40),total:items.length,pages,page};
+}
+
 function picker(state){
   const repo=state.providerRepositories?.find(r=>r.id===state.activeProviderRepoId);
   if(!repo)return '';
   const items=state.providerCatalog||[];
-  const query=(state.providerCatalogQuery||'').trim().toLowerCase();
-  const filtered=query?items.filter(p=>
-    (p.name+' '+p.id+' '+p.type+' '+p.lang).toLowerCase().includes(query)):items;
-  const page=Math.min(state.providerCatalogPage||0,Math.max(0,Math.ceil(filtered.length/40)-1));
-  const list=filtered.slice(page*40,(page+1)*40);
+  const {list,total,pages,page}=sourcePage(state,repo);
+  const categories=[...new Set(items.flatMap(item=>sourceCategories(item,repo.kind)))].sort();
   const chosen=state.providerSelection||new Set();
   return '<section class="card provider-catalog"><div class="card-head"><div><h2>'+
     safe(repo.label)+' · Select extensions</h2><p class="subtitle">'+safe(typeNames[repo.kind])+
     ' · '+count(items.length)+' discovered · <strong id="provider-selected-count">'+count(chosen.size)+'</strong> selected</p></div>'+
     '<button class="btn btn-ghost btn-sm" data-action="provider-close-catalogue">Close</button></div>'+
     '<div class="card-body"><p class="subtitle">Checked extensions are selected for remote installation; unchecked ones will be removed from this repository\'s managed selection when you save. Installed APKs are not remotely uninstalled.</p>'+
-    '<form id="provider-catalog-filter" class="provider-filter"><input class="field" name="query" type="search" placeholder="Search by name, language or ID" value="'+safe(state.providerCatalogQuery||'')+'">'+
+    '<form id="provider-catalog-filter" class="provider-filter"><select id="provider-source-category" class="field" aria-label="Source category"><option value="">All categories</option>'+
+    categories.map(label=>'<option value="'+safe(label)+'" '+(label===state.providerCatalogCategory?'selected':'')+'>'+safe(label)+'</option>').join('')+'</select><input class="field" name="query" type="search" placeholder="Search by name, language or ID" value="'+safe(state.providerCatalogQuery||'')+'">'+
     '<button class="btn btn-ghost" type="submit">Search</button></form>'+
     '<div class="provider-select-toolbar"><button class="btn btn-ghost btn-sm" type="button" data-action="provider-select-visible">Select this page</button>'+
     '<button class="btn btn-ghost btn-sm" type="button" data-action="provider-clear-visible">Clear this page</button></div>'+
     (list.length?'<div class="provider-source-list">'+list.map(item=>
       '<label class="provider-source-item"><input type="checkbox" data-provider-source-id="'+safe(item.id)+'"'+(chosen.has(item.id)?' checked':'')+'>'+
-      '<span class="provider-source-info"><strong>'+safe(item.name)+'</strong><small>'+safe(item.id)+
+      '<span class="provider-source-info"><strong>'+safe(item.name)+'</strong><small>'+sourceCategories(item,repo.kind).map(safe).join(' · ')+' · '+safe(item.id)+
       (details(item)?' · '+details(item):'')+'</small></span></label>').join('')+'</div>':
       '<div class="empty">No sources match this search.</div>')+
-    '<div class="provider-pagination"><span>'+count(filtered.length)+' matches · Page '+(page+1)+' / '+Math.max(1,Math.ceil(filtered.length/40))+'</span>'+
+    '<div class="provider-pagination"><span>'+count(total)+' matches · Page '+(page+1)+' / '+pages+'</span>'+
     '<div><button type="button" class="btn btn-ghost btn-sm" data-action="provider-page-prev"'+(page===0?' disabled':'')+'>Previous</button> '+
-    '<button type="button" class="btn btn-ghost btn-sm" data-action="provider-page-next"'+((page+1)*40>=filtered.length?' disabled':'')+'>Next</button></div></div>'+
+    '<button type="button" class="btn btn-ghost btn-sm" data-action="provider-page-next"'+(page+1>=pages?' disabled':'')+'>Next</button></div></div>'+
     '<button class="btn btn-primary" type="button" data-action="provider-save-selection">Save selected extensions</button>'+
     '</div></section>';
 }
@@ -155,10 +189,10 @@ export function multiProvidersPage(state){
   const selected=state.managedProviders||[];
   const counts=new Map(repos.map(r=>[r.id,selected.filter(x=>x.repository_id===r.id)]));
   const newKind=state.providerDraftKind||'cloudstream';
-  return '<div class="page-head"><div><div class="eyebrow">Seven provider ecosystems</div>'+
-    '<h1 class="heading">Provider <span>repositories</span></h1>'+
+  return '<div class="page-head"><div>'+
+    '<h1 class="heading">Provider sources</h1>'+
     '<p class="subtitle">Add a repository, inspect its source catalogue, and choose which extensions to install remotely.</p></div></div>'+
-    '<div class="dual-grid"><section class="card"><div class="card-head"><h2>Add repository</h2></div>'+
+    '<div><details class="card catalogue-tool" '+(repos.length?'':'open')+'><summary>Add repository</summary>'+
     '<form class="card-body stack" id="admin-repository-form">'+
     '<label class="label" for="provider-kind">Provider type</label>'+
     '<select class="field" name="kind" id="provider-kind">'+
@@ -169,10 +203,10 @@ export function multiProvidersPage(state){
     '<label class="label" for="provider-repo-url">Repository / addon HTTPS URL</label>'+
     '<input class="field" id="provider-repo-url" name="repo_url" required type="url" placeholder="https://.../index.json">'+
     '<button class="btn btn-primary" type="submit">Scan & add repository</button>'+
-    '</form></section>'+
-    '<section class="card"><div class="card-head"><h2>Repository registry</h2><span class="pill">'+count(repos.length)+' repos</span></div>'+
-    '<div class="card-body"><div class="alert">Extension packages run external code on Android. Use trusted repositories only. Selection is a configuration request, not proof of installation on a device; install status is not collected.</div>'+
-    (repos.length?repos.map(repo=>{
+    '</form></details>'+
+    '<section class="card"><div class="card-head"><h2>Repositories</h2><span class="pill">'+count(repos.length)+' repos</span></div>'+
+    '<div class="card-body"><div class="alert">Choose a trusted repository to manage its sources.</div>'+
+    (repos.length?byEcosystem(repos,(label,group)=>'<h3>'+safe(label)+' ('+count(group.length)+')</h3>'+group.map(repo=>{
       const rows=counts.get(repo.id)||[];
       return '<div class="activity-row provider-repo-row"><div class="activity-content"><strong>'+
       safe(repo.label)+'</strong><div class="activity-sub">'+safe(typeNames[repo.kind]||repo.kind)+
@@ -180,23 +214,21 @@ export function multiProvidersPage(state){
       '<small class="activity-sub provider-url">'+safe(repo.repo_url)+'</small></div>'+
       '<div class="provider-row-actions"><button class="btn btn-ghost btn-sm" data-action="provider-manage-repo" data-id="'+safe(repo.id)+'">Choose sources</button>'+
       '<button class="btn btn-ghost btn-sm user-delete-btn" data-action="provider-remove-repo" data-id="'+safe(repo.id)+'">Remove</button></div></div>';
-    }).join(''):'<div class="empty"><p>No repositories configured. Add one to discover sources.</p></div>')+
+    }).join('')):'<div class="empty"><p>No repositories configured. Add one to discover sources.</p></div>')+
     '</div></section></div>'+
     picker(state)+
     (selected.length?'<section class="card provider-selected-table"><div class="card-head"><h2>Selected sources</h2><span class="pill">'+count(selected.length)+'</span></div>'+
     '<div class="admin-data-table"><table><thead><tr><th>Source</th><th>Type</th><th>Install request</th><th>Actions</th></tr></thead><tbody>'+
-    selected.map(x=>'<tr><td><strong>'+safe(x.label)+'</strong><small>'+safe(x.plugin_id)+'</small></td>'+
+    byEcosystem(selected,(label,group)=>'<tr><th colspan="4" scope="colgroup">'+safe(label)+' ('+count(group.length)+')</th></tr>'+group.map(x=>'<tr><td><strong>'+safe(x.label)+'</strong><small>'+safe(x.plugin_id)+'</small></td>'+
       '<td>'+safe(typeNames[x.kind]||x.kind)+'</td><td>'+(x.enabled&&x.auto_install?'Requested':'Disabled')+'</td>'+
       '<td><button class="btn btn-ghost btn-sm" data-action="toggle-provider" data-id="'+safe(x.id)+'">'+
       (x.enabled?'Disable':'Enable')+'</button>'+
       (x.kind==='cloudstream'&&!x.is_default?
         ' <button class="btn btn-ghost btn-sm" data-action="default-provider" data-id="'+safe(x.id)+'">Default</button>':'')+
-      ' <button class="btn btn-ghost btn-sm user-delete-btn" data-action="remove-provider" data-id="'+safe(x.id)+'">Remove</button></td></tr>').join('')+
+      ' <button class="btn btn-ghost btn-sm user-delete-btn" data-action="remove-provider" data-id="'+safe(x.id)+'">Remove</button></td></tr>').join(''))+
     '</tbody></table></div></section>':'');
 }
 export function visibleProviderSources(state){
-  const items=state.providerCatalog||[];
-  const q=(state.providerCatalogQuery||'').trim().toLowerCase();
-  const filtered=q?items.filter(p=>(p.name+' '+p.id+' '+p.type+' '+p.lang).toLowerCase().includes(q)):items;
-  return filtered.slice((state.providerCatalogPage||0)*40,((state.providerCatalogPage||0)+1)*40);
+  const repo=state.providerRepositories?.find(r=>r.id===state.activeProviderRepoId);
+  return sourcePage(state,repo).list;
 }

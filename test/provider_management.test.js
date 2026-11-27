@@ -97,3 +97,16 @@ test('repo removal requires an existing selected repo',async()=>{
   const s={member:{role:'admin'},providerRepositories:[]};
   await assert.rejects(removeProviderRepository({},s,'not-found'),/not found/);
 });
+
+test('category and search apply to the same visible selection page',()=>{
+  const state={member:{role:'admin'}, activeProviderRepoId:'r',providerRepositories:[{id:'r',label:'My repo',kind:'cloudstream'}],
+    providerSelection:new Set(['one']),providerCatalogQuery:'show',providerCatalogCategory:'Movies',providerCatalog:[
+      {id:'one',name:'Show A',type:'plugin',categories:['Anime','Movie']},
+      {id:'two',name:'Show B',type:'plugin',categories:['TvSeries']},
+      {id:'three',name:'Other',type:'plugin',categories:['Movie']}]};
+  assert.deepEqual(visibleProviderSources(state).map(x=>x.id),['one']);
+  const html=multiProvidersPage(state);
+  assert.match(html,/data-provider-source-id="one" checked/);
+  assert.doesNotMatch(html,/data-provider-source-id="two"/);
+  assert.match(html,/All categories/);
+});
