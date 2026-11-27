@@ -6,6 +6,15 @@ import { PROVIDER_TYPES, validateProviderRepo, multiProvidersPage,
   from '../src/provider_management.js';
 
 const repoUrl='https://raw.githubusercontent.com/owner/repo/main/repo.json';
+test('CNC manifest aliases scan and sync under one client-compatible repository URL',()=>{
+  const root='https://raw.githubusercontent.com/Abhishekred/CNCVerse-Cloud-Stream-Extension/';
+  const validate=(path)=>validateProviderRepo({kind:'cloudstream',label:'CNC',repo_url:root+path});
+  for(const path of ['refs/heads/builds/CNC.json','builds/CNC.json','refs/heads/builds/repo.json','builds/repo.json']){
+    assert.equal(validate(path).data.repo_url,root+'refs/heads/builds/repo.json');
+  }
+  assert.ok(validate('refs/heads/builds/CNC.json?token=value').error);
+  assert.ok(validate('other/CNC.json').error);
+});
 test('seven ecosystems offered in provider dropdown',()=>{
   assert.deepEqual(PROVIDER_TYPES.map(x=>x[0]),[
     'cloudstream','mangayomi','zangetsu','stremio','aniyomi','mihon','lnreader'

@@ -1,3 +1,4 @@
+import { managedManifestUrl } from './cloudstream_manifest.js';
 import { escapeHtml as esc, shortDate } from './utils.js';
 
 export const canManageUsers = (role) => role === 'owner' || role === 'admin';
@@ -14,7 +15,7 @@ const allowed = (role) => {
   if (!canManageUsers(role)) throw new Error('Owner/admin permission required.');
 };
 export function validateManagedProvider(value) {
-  const repo_url = String(value.repo_url || '').trim();
+  const repo_url = managedManifestUrl(value.repo_url);
   const plugin_id = String(value.plugin_id || '').trim();
   const label = String(value.label || '').trim();
   const priority = Number(value.priority ?? 100);

@@ -1,3 +1,4 @@
+import { managedManifestUrl } from './cloudstream_manifest.js';
 import { escapeHtml as esc } from './utils.js';
 
 export const PROVIDER_TYPES = Object.freeze([
@@ -14,7 +15,7 @@ const safe=(value)=>esc(String(value??''));
 export function validateProviderRepo(form){
   const kind=String(form.kind||'');
   const label=String(form.label||'').trim();
-  const url=String(form.repo_url||'').trim();
+  const url=kind==='cloudstream' ? managedManifestUrl(form.repo_url) : String(form.repo_url||'').trim();
   if(!typeNames[kind])return {error:'Select a supported provider type.'};
   if(!label||label.length>120)return {error:'Repository name must be 1–120 characters.'};
   if(url.length>700)return {error:'URL is too long.'};
