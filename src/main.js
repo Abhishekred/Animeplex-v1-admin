@@ -4,6 +4,8 @@ import './style.css';
 import './glass.css';
 import './control_manager.css';
 import './admin_management.css';
+import './appearance.css';
+import { installThemePicker } from './appearance.js';
 import { canManageUsers, usersPage, providersPage, loadAdminUsers, openAdminUser,
   loadAdminProviders, saveAdminProvider, changeAdminProvider, removeAdminProvider,
   setAdminUserSourcesAccess, updateAdminUser, deleteAdminUser,
@@ -84,6 +86,8 @@ const iconShapes = {
 function icon(name, size = 18) {
   return `<svg class="icon" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${iconShapes[name] ?? iconShapes.info}</svg>`;
 }
+const themeButton = installThemePicker(icon);
+
 function pill(status) {
   return `<span class="pill ${esc(status)}">${status === 'published' ? icon('check',12) : status === 'paused' ? icon('pause',12) : icon('clock',12)} ${esc(status)}</span>`;
 }
@@ -113,7 +117,7 @@ function nav(label, page, shape) {
 }
 function authView() {
   root.innerHTML = `<div class="auth"><div class="auth-layout">
-    <div class="auth-brand">${brand()}</div>
+    <div class="auth-brand">${brand()}${themeButton}</div>
     <div class="auth-card">
       <div class="eyebrow">Authorized access only</div>
       <h1 class="auth-title">Welcome back.</h1>
@@ -162,7 +166,7 @@ function shell() {
     <main class="main">
       <div class="topbar"><div class="mobile-top"><button type="button" class="icon-btn" data-action="menu" aria-label="Open menu">${icon('menu',22)}</button></div>
       <div class="breadcrumb"><span>AnimePlex</span> ${icon('arrow',13)} <strong>${state.page === 'overview' ? 'Overview' : state.page === 'releases' ? 'Releases' : state.page === 'controls' ? 'Player controls' : state.page === 'region' ? 'Streaming region' : state.page === 'about' ? 'About page' : state.page === 'catalogue' ? 'Catalogue' : state.page === 'users' ? 'Users' : state.page === 'providers' ? 'Provider sources' : 'Update settings'}</strong></div>
-      <div class="bar-actions"><span class="bar-time">${esc(new Date().toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}))}</span>
+      <div class="bar-actions">${themeButton}<span class="bar-time">${esc(new Date().toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}))}</span>
         <div class="bar-chip">${icon('shield',15)} Secure workspace</div>
       </div></div>
       <div class="content">
@@ -572,9 +576,9 @@ async function publishAdminRegion() {
 
 function render() {
   if (!supabase) {
-    root.innerHTML = `<div class="auth"><div class="auth-layout"><div class="auth-brand">${brand()}</div><div class="auth-card"><h1 class="auth-title">Connect Supabase</h1><p class="auth-copy">Public VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are required in Vercel environment settings. Never expose a service-role secret.</p></div></div></div>`;
+    root.innerHTML = `<div class="auth"><div class="auth-layout"><div class="auth-brand">${brand()}${themeButton}</div><div class="auth-card"><h1 class="auth-title">Connect Supabase</h1><p class="auth-copy">Public VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are required in Vercel environment settings. Never expose a service-role secret.</p></div></div></div>`;
   } else if (state.loading) {
-    root.innerHTML = `<div class="auth"><div class="auth-layout"><div class="auth-brand">${brand()}</div><div class="auth-card"><div class="eyebrow">Checking your session</div><h1 class="auth-title">Opening workspace…</h1><p class="auth-copy">Verifying admin permissions.</p></div></div></div>`;
+    root.innerHTML = `<div class="auth"><div class="auth-layout"><div class="auth-brand">${brand()}${themeButton}</div><div class="auth-card"><div class="eyebrow">Checking your session</div><h1 class="auth-title">Opening workspace…</h1><p class="auth-copy">Verifying admin permissions.</p></div></div></div>`;
   } else if (!state.user || !state.member) {
     authView();
   } else {
