@@ -260,15 +260,16 @@ function field(label, name, value, placeholder='', opts={}) {
 function editor() {
   const selected = selectedRelease();
   const row = state.draft ?? selected ?? initialRelease();
-  const locked = selected?.status === 'published';
+  const deleting = selected?.status === 'deleting';
+  const locked = selected?.status === 'published' || deleting;
   const status = selected?.status ?? 'new';
-  const warning = selected && validateRelease(row).error;
+  const warning = selected && !deleting && validateRelease(row).error;
   const details = selected
     ? `<span>${pill(selected.status)} <span class="pill ${esc(selected.channel)}">${esc(selected.channel)}</span></span>`
     : '<span class="pill draft">New draft</span>';
   return `<section class="card">
     <div class="card-head"><div><h2>${selected ? 'Edit release · v' + esc(selected.version) : 'Create a new release'}</h2>
-      <p>${locked ? 'Pause this release before editing fields.' : 'Saving a draft does not send any update to users.'}</p></div>${details}</div>
+      <p>${locked ? (deleting ? 'Deletion pending. Retry to finish storage cleanup.' : 'Pause this release before editing fields.') : 'Saving a draft does not send any update to users.'}</p></div>${details}</div>
     <form id="release-form"><div class="card-body"><div class="form-grid">
       ${field('Version *','version',row.version,'2.3.7',{required:true,disabled:locked,hint:'Must be newer than the installed app version.'})}
       <div><label for="release-channel" class="label">Release channel *</label>
@@ -317,9 +318,9 @@ function editor() {
     </div></div>
     <div class="form-actions">
       ${!locked ? `<button type="submit" class="btn btn-primary" ${state.busy ? 'disabled' : ''}>${icon('save',16)} ${selected ? 'Save changes' : 'Save draft'}</button>` : ''}
-      ${selected && selected.status !== 'published' ? `<button type="button" class="btn btn-outline" data-action="publish" ${state.busy ? 'disabled' : ''}>${icon('upload',16)} Publish update</button>` : ''}
+      ${selected && !locked ? `<button type="button" class="btn btn-outline" data-action="publish" ${state.busy ? 'disabled' : ''}>${icon('upload',16)} Publish update</button>` : ''}
       ${selected && selected.status === 'published' ? `<button type="button" class="btn btn-danger" data-action="pause" ${state.busy ? 'disabled' : ''}>${icon('pause',16)} Pause release</button>` : ''}
-      ${selected && selected.status === 'draft' ? `<button type="button" class="btn btn-danger btn-sm" data-action="delete" ${state.busy ? 'disabled' : ''}>${icon('trash',15)} Delete draft</button>` : ''}
+      ${selected && ['draft','paused','deleting'].includes(selected.status) ? `<button type="button" class="btn btn-danger btn-sm" data-action="delete" ${state.busy ? 'disabled' : ''}>${icon('trash',15)} ${deleting ? 'Retry APK deletion' : 'Delete release & APK'}</button>` : ''}
       <span class="form-note">${status === 'published' ? 'Live · visible to eligible users' : 'Not publicly announced unless published'}</span>
     </div></form>
     ${warning ? `<div style="padding:0 25px 16px"><div class="alert warning">${icon('alert',18)} <div><strong>APK configuration needs fixing:</strong> ${esc(warning)} Pause this release, then correct the APK URL and size before publishing again.</div></div></div>` : ''}
@@ -689,7 +690,7 @@ async function uploadApkChunks(file) {
 async function saveDraft(form) {
   if (state.busy) return;
   const chosen = selectedRelease();
-  if (chosen?.status === 'published') {
+  if (['published','deleting'].includes(chosen?.status)) {
     toast('Pause the release before editing it.',true);return;
   }
   const f = new FormData(form);
@@ -756,7 +757,7 @@ function selectRelease(id) {
 }
 async function publishRelease() {
   const row=selectedRelease();
-  if(!row) return;
+  if(!row || !['draft','paused'].includes(row.status)) return;
   const checked=validateRelease(row);
   if(checked.error){toast(checked.error,true);return;}
   if(!window.confirm(`Publish v${row.version} (${row.channel}) to AnimePlex users? Ensure the HTTPS APK is SIGNED and installable. This action makes the update immediately eligible for display.`))return;
@@ -780,13 +781,46 @@ async function pauseRelease() {
 }
 async function deleteDraft() {
   const row=selectedRelease();
-  if(!row||row.status!=='draft')return;
-  if(!window.confirm(`Delete draft v${row.version}?`))return;
+  if(!row || !['draft','paused','deleting'].includes(row.status))return;
+  const uploaded=row.delivery_method==='upload';
+  if(!window.confirm(`Permanently delete v${row.version} (${row.channel})? ${uploaded ? 'All stored APK parts will be removed from Supabase. ' : 'External download files will not be deleted. '}This cannot be undone.`))return;
   await mutate(async()=>{
-    const {error}=await supabase.from('animeplex_update_releases').delete().eq('id',row.id);
-    if(error)throw error;
-    state.selectedId=null;state.draft=null;
-    toast('Draft deleted.');
+    try {
+      const {data:current,error:readError}=await supabase.from('animeplex_update_releases').select('*').eq('id',row.id).single();
+      if(readError)throw readError;
+      if(!['draft','paused','deleting'].includes(current.status))throw new Error('Pause the published release before deleting it.');
+      let paths=[];
+      if(current.delivery_method==='upload'){
+        if(!validUploadParts(current.apk_parts,Number(current.apk_size)))throw new Error('Invalid APK part metadata; no files deleted.');
+        paths=current.apk_parts.map(p=>p.path);
+      }
+      if(current.status!=='deleting'){
+        const {error}=await supabase.from('animeplex_update_releases')
+          .update({status:'deleting',updated_at:new Date().toISOString()})
+          .eq('id',current.id).eq('status',current.status).eq('updated_at',current.updated_at).select('id').single();
+        if(error)throw error;
+      }
+      if(paths.length){
+        const {error}=await supabase.storage.from(APK_BUCKET).remove(paths);
+        if(error)throw error;
+        // A retry may find previously deleted parts. Verify that none remain.
+        for(const path of paths){
+          const slash=path.lastIndexOf('/');
+          const folder=path.slice(0,slash), name=path.slice(slash+1);
+          const {data,error:listError}=await supabase.storage.from(APK_BUCKET).list(folder,{search:name,limit:100});
+          if(listError)throw listError;
+          if(data.some(item=>item.name===name))throw new Error('APK part still exists. Retry deletion; shared or active APK parts are protected.');
+        }
+      }
+      const {error}=await supabase.from('animeplex_update_releases').delete()
+        .eq('id',current.id).eq('status','deleting').select('id').single();
+      if(error)throw error;
+      state.selectedId=null;state.draft=null;
+      toast(uploaded?'Release and stored APK deleted.':'Release deleted; external APK unchanged.');
+    }catch(error){
+      await loadData({quiet:true});
+      throw error;
+    }
   });
 }
 async function login(form) {
