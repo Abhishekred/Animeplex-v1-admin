@@ -83,6 +83,7 @@ export async function removeCurated(db,state,id) {
 }
 
 export function curatedPage(state) {
+  if (state.curatedLoading) return '<div class="page-head"><h1 class="heading">AnimePlex Catalogue</h1></div><p role="status">Loading catalogue…</p>';
   const draft = state.curatedDraft;
   const button = (action,id,label) => '<button type="button" class="btn btn-ghost btn-sm" data-curated="'+action+'" data-id="'+esc(id)+'">'+label+'</button>';
   const item = (row,actions) => '<div class="catalogue-entry">'+image(row)+'<div><strong>'+esc(row.title)+'</strong><br><small>'+esc(kindName(row.kind)+' · '+(row.release_year || 'Year unknown'))+'</small></div><div>'+actions+'</div></div>';

@@ -806,8 +806,9 @@ document.addEventListener('submit',async(e)=>{
       const form=new FormData(e.target);
       if(e.target.id==='curated-search') await searchCurated(state,form);
       else {await publishCurated(supabase,state,form);toast('Catalogue title published.');}
+      render();
     } catch(error){toast(errorMessage(error),true);}
-    finally {state.busy=false;render();}
+    finally {state.busy=false;}
     return;
   }
   if(e.target.id==='login-form'){e.preventDefault();await login(e.target);}
@@ -968,9 +969,13 @@ document.addEventListener('click',async(e)=>{
     if (['users','providers','catalogue'].includes(page) && !canManageUsers(state.member?.role)) {
       toast('Owner/admin permission required.',true);return;
     }
+    if(page==='catalogue') state.curatedLoading=true;
     state.page=page;state.mobileOpen=false;state.error='';render();window.scrollTo(0,0);
     try {
-      if(page==='catalogue') await loadCurated(supabase,state);
+      if(page==='catalogue'){
+        try {await loadCurated(supabase,state);}
+        finally {state.curatedLoading=false;}
+      }
       if(page==='users') await loadAdminUsers(supabase,state,state.userSearch,state.userOffset);
       if(page==='providers') await loadProviderRepositories(supabase,state);
       render();
